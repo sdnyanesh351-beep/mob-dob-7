@@ -777,11 +777,11 @@ fun QuizPlayerView(
                                     when {
                                         isCorrect -> Color(0xFF14532D) // Dark Green text for high contrast on light green
                                         isSelected && !isCorrect -> Color(0xFF7F1D1D) // Dark Red text for high contrast on light red
-                                        else -> MaterialTheme.colorScheme.onSurface
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                                     }
                                 }
                                 isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-                                else -> MaterialTheme.colorScheme.onSurface
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
                             }
 
                             val badgeBgColor = when {
@@ -1262,18 +1262,6 @@ fun QuizPlayerView(
                         Icon(Icons.AutoMirrored.Filled.NavigateBefore, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Previous")
-                    }
-
-                    // Question palette drawer toggle button
-                    IconButton(
-                        onClick = { showPaletteDrawer = true },
-                        modifier = Modifier.testTag("open_question_palette_sticky_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.GridOn,
-                            contentDescription = "Question Grid Palette",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
                     }
 
                     if (currentIndex < quiz.questions.size - 1) {
@@ -2712,7 +2700,7 @@ fun ReviewModeView(
                         val optionTextColor = when {
                             isCorrectKey -> Color(0xFF14532D)
                             userChosen && !isCorrectKey -> Color(0xFF7F1D1D)
-                            else -> MaterialTheme.colorScheme.onSurface
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
 
                         val borderColor = when {

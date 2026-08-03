@@ -62,11 +62,6 @@ data class ApiWalletResponse(
     val transactions: List<ApiWalletTransactionDto>
 )
 
-data class ApiWalletPostRequest(
-    val action: String,
-    val code: String? = null
-)
-
 data class ApiCreateOrderRequest(
     val amount: Int
 )
@@ -244,9 +239,6 @@ interface JobTraqMobileApiService {
     // 2. Wallet & Subscriptions
     @GET("api/wallet")
     suspend fun getWallet(): Response<ResponseBody>
-
-    @POST("api/wallet")
-    suspend fun postWalletAction(@Body request: ApiWalletPostRequest): Response<ApiStandardResponse>
 
     @POST("api/payments/order")
     suspend fun createPaymentOrder(@Body request: ApiCreateOrderRequest): Response<ApiOrderResponse>

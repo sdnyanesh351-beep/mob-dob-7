@@ -126,8 +126,8 @@ fun Phase2InterviewPrepScreen(
     onSchedulePracticeInterview: (InterviewEntity) -> Unit = {},
     onShowToast: (String) -> Unit
 ) {
-    var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Questions, 1: Quizzes, 2: Quiz History & Challenges 🏆
-    val subTabs = listOf("Question Bank", "Practice Quizzes", "Quiz History & Challenges 🏆")
+    var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Questions, 1: Quizzes, 2: Quiz History
+    val subTabs = listOf("Question Bank", "Practice Quizzes", "Quiz History")
 
     var activeQuiz by remember { mutableStateOf<QuizEntity?>(null) }
     var pendingQuizForConfig by remember { mutableStateOf<QuizEntity?>(null) }

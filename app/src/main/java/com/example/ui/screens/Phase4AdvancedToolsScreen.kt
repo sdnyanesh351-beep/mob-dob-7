@@ -91,7 +91,7 @@ fun Phase4AdvancedToolsScreen(
     onShowToast: (String) -> Unit
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Resumes & AI ATS, 1: AI Cover Letters, 2: Activity Log
-    val subTabs = listOf("Resumes & AI ATS", "AI Cover Letters & DM", "Activity Log")
+    val subTabs = listOf("Resumes & AI ATS", "AI Cover Letters", "Activity Log")
 
     Column(
         modifier = Modifier
@@ -461,14 +461,14 @@ private fun AICoverLetterSection(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "✉️ AI Cover Letter & Outreach Generator",
+                    text = "✉️ AI Cover Letter Generator",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 )
                 Text(
-                    text = "Craft highly targeted, professional cover letters and LinkedIn recruiter outreach DMs powered by Gemini AI.",
+                    text = "Craft highly targeted, professional cover letters powered by Gemini AI.",
                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
                 )
             }
@@ -541,13 +541,13 @@ private fun AICoverLetterSection(
             } else {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Generate Cover Letter & Outreach DM", fontWeight = FontWeight.Bold)
+                Text("Generate Cover Letter", fontWeight = FontWeight.Bold)
             }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("Saved Cover Letters & Outreach Messages:", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+        Text("Saved Cover Letters:", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
         Spacer(modifier = Modifier.height(10.dp))
 
         coverLetters.forEach { letter ->

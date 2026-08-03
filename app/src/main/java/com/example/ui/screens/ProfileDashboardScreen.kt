@@ -82,13 +82,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.QuizResult
 import com.example.data.UserEntity
-import com.example.data.QuestionEntity
-import com.example.data.BlogPostEntity
-import com.example.data.WalletTransactionEntity
-import android.content.Context
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -118,12 +111,7 @@ fun ProfileDashboardScreen(
     onLanguageSelected: (String) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     onOpenReferrals: () -> Unit = {},
-    onReplayOnboarding: (() -> Unit)? = null,
-    walletTransactions: List<WalletTransactionEntity> = emptyList(),
-    questions: List<QuestionEntity> = emptyList(),
-    blogPosts: List<BlogPostEntity> = emptyList(),
-    onToggleQuestionBookmark: (String) -> Unit = {},
-    onToggleBlogBookmark: (String) -> Unit = {}
+    onReplayOnboarding: (() -> Unit)? = null
 ) {
     val avatarColors = listOf(
         Color(0xFF4F46E5),
@@ -134,20 +122,8 @@ fun ProfileDashboardScreen(
     )
     val avatarColor = avatarColors.getOrElse(user.avatarBadgeIndex) { MaterialTheme.colorScheme.primary }
 
-    var selectedSectionTab by remember { mutableIntStateOf(0) } // 0: Overview, 1: Skills & Career, 2: Security & Preferences, 3: Bookmarks
+    var selectedSectionTab by remember { mutableIntStateOf(0) } // 0: Overview, 1: Skills & Career, 2: Security & Preferences
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
-    var showWalletHistoryDialog by remember { mutableStateOf(false) }
-
-    val ctx = LocalContext.current
-    val sharedPrefs = remember(ctx) { ctx.getSharedPreferences("jobtraq_profile_skills", Context.MODE_PRIVATE) }
-    var skillsList by remember {
-        mutableStateOf(
-            sharedPrefs.getString("skills", "Kotlin,Jetpack Compose,Coroutines & Flow,Room DB,Clean Architecture,System Design,REST APIs")
-                ?.split(",")
-                ?.filter { it.isNotBlank() }
-                ?: emptyList()
-        )
-    }
 
     Box(
         modifier = Modifier
@@ -357,8 +333,7 @@ fun ProfileDashboardScreen(
                     iconTint = Color(0xFFF59E0B),
                     value = "$walletCoins",
                     label = "JobCoins",
-                    subLabel = "Rewards Balance",
-                    onClick = { showWalletHistoryDialog = true }
+                    subLabel = "Rewards Balance"
                 )
             }
 
@@ -374,26 +349,20 @@ fun ProfileDashboardScreen(
                 Tab(
                     selected = selectedSectionTab == 0,
                     onClick = { selectedSectionTab = 0 },
-                    text = { Text("Account", fontWeight = FontWeight.Bold, fontSize = 10.sp) },
+                    text = { Text("Account Info", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
                     icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
                 Tab(
                     selected = selectedSectionTab == 1,
                     onClick = { selectedSectionTab = 1 },
-                    text = { Text("Skills", fontWeight = FontWeight.Bold, fontSize = 10.sp) },
+                    text = { Text("Career & Skills", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
                     icon = { Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
                 Tab(
                     selected = selectedSectionTab == 2,
                     onClick = { selectedSectionTab = 2 },
-                    text = { Text("Security", fontWeight = FontWeight.Bold, fontSize = 10.sp) },
+                    text = { Text("Security & Mode", fontWeight = FontWeight.Bold, fontSize = 12.sp) },
                     icon = { Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                )
-                Tab(
-                    selected = selectedSectionTab == 3,
-                    onClick = { selectedSectionTab = 3 },
-                    text = { Text("Saved", fontWeight = FontWeight.Bold, fontSize = 10.sp) },
-                    icon = { Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.size(18.dp)) }
                 )
             }
 
@@ -492,70 +461,26 @@ fun ProfileDashboardScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                skillsList.forEach { skill ->
+                                val skills = listOf(
+                                    "Kotlin", "Jetpack Compose", "Coroutines & Flow",
+                                    "Room DB", "Clean Architecture", "System Design",
+                                    "REST APIs", "AI Resume Optimization"
+                                )
+                                skills.forEach { skill ->
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
                                         color = MaterialTheme.colorScheme.primaryContainer,
                                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
+                                        Text(
+                                            text = skill,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontWeight = FontWeight.Bold
+                                            ),
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                        ) {
-                                            Text(
-                                                text = skill,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Delete skill",
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                                                modifier = Modifier
-                                                    .size(14.dp)
-                                                    .clickable {
-                                                        skillsList = skillsList - skill
-                                                        sharedPrefs.edit().putString("skills", skillsList.joinToString(",")).apply()
-                                                    }
-                                            )
-                                        }
+                                        )
                                     }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            var newSkillText by remember { mutableStateOf("") }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = newSkillText,
-                                    onValueChange = { newSkillText = it },
-                                    label = { Text("Add Skill Tag") },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(
-                                    onClick = {
-                                        if (newSkillText.isNotBlank()) {
-                                            val trimmed = newSkillText.trim()
-                                            if (!skillsList.contains(trimmed)) {
-                                                skillsList = skillsList + trimmed
-                                                sharedPrefs.edit().putString("skills", skillsList.joinToString(",")).apply()
-                                            }
-                                            newSkillText = ""
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Add")
                                 }
                             }
                         }
@@ -603,14 +528,6 @@ fun ProfileDashboardScreen(
                             )
                         }
                     }
-                }
-                3 -> {
-                    BookmarksTabContent(
-                        questions = questions,
-                        blogPosts = blogPosts,
-                        onToggleQuestionBookmark = onToggleQuestionBookmark,
-                        onToggleBlogBookmark = onToggleBlogBookmark
-                    )
                 }
             }
 
@@ -881,251 +798,6 @@ fun ProfileDashboardScreen(
                 onSave = onSaveProfile
             )
         }
-
-        // Wallet History Dialog
-        if (showWalletHistoryDialog) {
-            Dialog(onDismissRequest = { showWalletHistoryDialog = false }) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-                ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Text(
-                            text = "JobCoins Wallet History",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Current Balance: $walletCoins Coins",
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (walletTransactions.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(150.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No transactions found.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
-                            }
-                        } else {
-                            Column(
-                                modifier = Modifier
-                                    .heightIn(max = 280.dp)
-                                    .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                walletTransactions.forEach { tx ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                                            .padding(10.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = tx.description,
-                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
-                                            )
-                                            Text(
-                                                text = java.text.SimpleDateFormat("MMM dd, yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(tx.timestamp)),
-                                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
-                                            )
-                                        }
-                                        val isCredit = tx.type.equals("credit", ignoreCase = true) || tx.amount >= 0
-                                        Text(
-                                            text = (if (isCredit) "+" else "") + "${tx.amount}",
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isCredit) Color(0xFF166534) else Color(0xFF991B1B)
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                            TextButton(onClick = { showWalletHistoryDialog = false }) {
-                                Text("Close")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BookmarksTabContent(
-    questions: List<QuestionEntity>,
-    blogPosts: List<BlogPostEntity>,
-    onToggleQuestionBookmark: (String) -> Unit,
-    onToggleBlogBookmark: (String) -> Unit
-) {
-    var subTab by remember { mutableIntStateOf(0) } // 0: Questions, 1: Blogs
-
-    val bookmarkedQuestions = remember(questions) { questions.filter { it.isBookmarked } }
-    val bookmarkedBlogs = remember(blogPosts) { blogPosts.filter { it.bookmarkedBy.isNotEmpty() } }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        TabRow(
-            selectedTabIndex = subTab,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clip(RoundedCornerShape(12.dp))
-        ) {
-            Tab(
-                selected = subTab == 0,
-                onClick = { subTab = 0 },
-                text = { Text("Questions (${bookmarkedQuestions.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp) }
-            )
-            Tab(
-                selected = subTab == 1,
-                onClick = { subTab = 1 },
-                text = { Text("Blogs (${bookmarkedBlogs.size})", fontWeight = FontWeight.Bold, fontSize = 11.sp) }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (subTab == 0) {
-            if (bookmarkedQuestions.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No saved questions yet.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    bookmarkedQuestions.forEach { question ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.secondaryContainer
-                                    ) {
-                                        Text(
-                                            text = question.category,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = question.questionText,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 3,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(onClick = { onToggleQuestionBookmark(question.id) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bookmark,
-                                        contentDescription = "Remove Bookmark",
-                                        tint = Color(0xFFFBC02D)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            if (bookmarkedBlogs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No bookmarked blogs yet.",
-                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    )
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    bookmarkedBlogs.forEach { post ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = post.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 2,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "By ${post.author} • ${post.category}",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(onClick = { onToggleBlogBookmark(post.id) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bookmark,
-                                        contentDescription = "Remove Bookmark",
-                                        tint = Color(0xFFFBC02D)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1136,11 +808,10 @@ private fun StatCard(
     iconTint: Color,
     value: String,
     label: String,
-    subLabel: String,
-    onClick: (() -> Unit)? = null
+    subLabel: String
 ) {
     Card(
-        modifier = if (onClick != null) modifier.clickable { onClick() } else modifier,
+        modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
