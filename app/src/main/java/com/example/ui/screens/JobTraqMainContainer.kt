@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
