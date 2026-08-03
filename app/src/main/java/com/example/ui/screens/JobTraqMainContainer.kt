@@ -641,7 +641,9 @@ fun JobTraqMainContainer(
                                     },
                                     onToggleLike = { id -> repository.toggleLikePost(id) },
                                     onAddComment = { id, comment -> repository.addCommentToPost(id, comment) },
-                                    onShowToast = { showToast(it) }
+                                    onShowToast = { showToast(it) },
+                                    onRedeemCode = { code -> repository.redeemPromoCode(code) },
+                                    onPurchaseStreakFreeze = { repository.purchaseStreakFreeze() }
                                 )
                             }
 

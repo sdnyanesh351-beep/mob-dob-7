@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.Button
@@ -87,10 +88,13 @@ fun Phase3CommunityScreen(
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
-    onShowToast: (String) -> Unit
+    onShowToast: (String) -> Unit,
+    onRedeemCode: suspend (String) -> Pair<Boolean, String> = { Pair(false, "") },
+    onPurchaseStreakFreeze: suspend () -> Pair<Boolean, String> = { Pair(false, "") }
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Feed, 1: Mentors, 2: Gamification, 3: Wallet
     val subTabs = listOf("Feed", "Alumni", "Gamification", "Wallet")
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -126,7 +130,14 @@ fun Phase3CommunityScreen(
                 onShowToast = onShowToast
             )
             2 -> GamificationSection(walletState = walletState, onShowToast = onShowToast)
-            3 -> WalletSection(walletState = walletState, onShowToast = onShowToast)
+            3 -> WalletScreen(
+                walletState = walletState,
+                onRedeemCode = onRedeemCode,
+                onPurchaseStreakFreeze = onPurchaseStreakFreeze,
+                onBack = null,
+                showToast = onShowToast,
+                coroutineScope = coroutineScope
+            )
         }
     }
 }

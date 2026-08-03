@@ -63,7 +63,7 @@ fun WalletScreen(
     walletState: WalletState,
     onRedeemCode: suspend (String) -> Pair<Boolean, String>,
     onPurchaseStreakFreeze: suspend () -> Pair<Boolean, String>,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)? = null,
     showToast: (String) -> Unit,
     coroutineScope: kotlinx.coroutines.CoroutineScope
 ) {
@@ -83,17 +83,19 @@ fun WalletScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier.testTag("wallet_back_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onSurface
-                )
+            if (onBack != null) {
+                IconButton(
+                    onClick = { onBack() },
+                    modifier = Modifier.testTag("wallet_back_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
             }
-            Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "Digital Wallet",
                 style = MaterialTheme.typography.titleLarge.copy(
