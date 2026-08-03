@@ -701,7 +701,16 @@ fun JobTraqMainContainer(
                                     onLanguageSelected = { repository.setLanguage(it) },
                                     onOpenSettings = { isSettingsScreenOpen = true },
                                     onOpenReferrals = { isReferralsScreenOpen = true },
-                                    onReplayOnboarding = onReplayOnboarding
+                                    onReplayOnboarding = onReplayOnboarding,
+                                    walletTransactions = walletState.transactions,
+                                    questions = questions,
+                                    blogPosts = blogPosts,
+                                    onToggleQuestionBookmark = { qId -> repository.toggleBookmark(qId) },
+                                    onToggleBlogBookmark = { blogId ->
+                                        coroutineScope.launch {
+                                            repository.toggleBookmarkBlogPost(blogId)
+                                        }
+                                    }
                                 )
                             }
                         }
