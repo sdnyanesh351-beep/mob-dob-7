@@ -1108,7 +1108,7 @@ private fun BookmarksTabContent(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "By ${post.author} • ${post.category}",
+                                        text = "By ${post.author} • ${post.tags.firstOrNull() ?: "Blog"}",
                                         style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     )
                                 }
