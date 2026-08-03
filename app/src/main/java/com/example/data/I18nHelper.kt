@@ -18,7 +18,7 @@ object I18nHelper {
             "community_feed" to "Community Feed",
             "rewards" to "Rewards & Wallet",
             "resume_analyzer" to "AI Resume Analyzer",
-            "offline_status" to "Synced",
+            "offline_status" to "Synced • Offline Ready",
             "daily_challenge" to "Daily Interview Challenge"
         ),
         "hi" to mapOf(
@@ -36,7 +36,7 @@ object I18nHelper {
             "community_feed" to "समुदाय फीड",
             "rewards" to "पुरस्कार और वॉलेट",
             "resume_analyzer" to "एआई रेज़्यूमे विश्लेषक",
-            "offline_status" to "सिंक किया गया",
+            "offline_status" to "सिंक किया गया • ऑफ़लाइन तैयार",
             "daily_challenge" to "दैनिक साक्षात्कार चुनौती"
         ),
         "mr" to mapOf(
@@ -54,7 +54,7 @@ object I18nHelper {
             "community_feed" to "समुदाय फीड",
             "rewards" to "बक्षीस आणि वॉलेट",
             "resume_analyzer" to "AI रेझ्युमे विश्लेषक",
-            "offline_status" to "सिंक केलेले",
+            "offline_status" to "सिंक केलेले • ऑफलाइन तयार",
             "daily_challenge" to "दैनिक मुलाखत आव्हान"
         )
     )

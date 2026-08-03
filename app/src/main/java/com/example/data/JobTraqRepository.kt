@@ -87,7 +87,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         }
     }
 
-    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 20) = withContext(Dispatchers.IO) {
+    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 1000) = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) return@withContext
         try {
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
@@ -249,6 +249,30 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         _referrals.value = emptyList()
         _referralLeaderboard.value = emptyList()
         _referralActivityLogs.value = emptyList()
+        _blogPosts.value = listOf(
+            BlogPostEntity(
+                id = "test-blog-1",
+                title = "Mastering Jetpack Compose Performance",
+                content = "Jetpack Compose makes building beautiful Android UIs quick and easy, but performance optimization is critical. Remember to use remember, derivedStateOf, and correct keying in LazyColumn to avoid redraw lags and junk frames.",
+                excerpt = "Optimizing composition, layout, and drawing phases in Compose.",
+                author = "Alex Rivera",
+                date = "2026-08-01T10:00:00Z",
+                imageUrl = "https://placehold.co/800x400.png",
+                tags = listOf("Compose", "Performance", "Kotlin"),
+                bookmarkedBy = listOf("user-alex-101")
+            ),
+            BlogPostEntity(
+                id = "test-blog-2",
+                title = "Advanced Retrofit and OkHttp Interceptors",
+                content = "Interceptors are a powerful mechanism in OkHttp that can monitor, rewrite, and retry calls. Here we explore writing a custom token refresh interceptor for secure authentication and auto token rejuvenation.",
+                excerpt = "Building robust token refresh and logging interceptors.",
+                author = "Jordan Smith",
+                date = "2026-07-28T14:30:00Z",
+                imageUrl = null,
+                tags = listOf("Networking", "Retrofit", "OkHttp"),
+                bookmarkedBy = emptyList()
+            )
+        )
     }
 
     // Base API URL & Multi-tenant state
@@ -1122,7 +1146,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             val apiService = RetrofitClient.createApiService(cleanUrl, sessionManager)
             fetchJobsFromApi(apiService)
             fetchCommunityPostsFromApi(apiService)
-            fetchQuestionsFromApi(apiService)
+            fetchQuestionsFromApi(apiService, page = 1, limit = 1000)
             fetchQuizzesFromApi(apiService)
             fetchInterviewsFromApi(apiService)
             fetchReferralsFromApi(apiService)
@@ -1265,7 +1289,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         }
     }
 
-    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 20) {
+    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 1000) {
         try {
             val res = apiService.getQuestions(page = page, limit = limit)
             if (res.isSuccessful && res.body() != null) {
@@ -1351,6 +1375,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                         if (questionsArr != null && questionsArr.length() > 0) {
                             for (j in 0 until questionsArr.length()) {
                                 val qItem = questionsArr.getJSONObject(j)
+                                val qId = qItem.optString("id")
                                 val qOptionsArr = qItem.optJSONArray("mcqOptions") ?: qItem.optJSONArray("options")
                                 val qOptionsList = mutableListOf<String>()
                                 if (qOptionsArr != null) {
@@ -1358,16 +1383,34 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                         qOptionsList.add(qOptionsArr.getString(k))
                                     }
                                 }
-                                val isMcq = qItem.optBoolean("isMCQ", false) || qOptionsList.isNotEmpty()
-                                val finalOptions = if (qOptionsList.isNotEmpty()) {
-                                    qOptionsList
+                                
+                                var resolvedOptions = qOptionsList.toList()
+                                var resolvedCorrectIdx = qItem.optInt("correctOptionIndex", -1)
+                                var resolvedSampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answer", "") }
+                                
+                                val matchedBankQuestion = _questions.value.find { it.id == qId }
+                                if (matchedBankQuestion != null) {
+                                    if (resolvedOptions.isEmpty()) {
+                                        resolvedOptions = matchedBankQuestion.options
+                                    }
+                                    if (resolvedCorrectIdx == -1) {
+                                        resolvedCorrectIdx = matchedBankQuestion.correctOptionIndex
+                                    }
+                                    if (resolvedSampleAnswer.isBlank()) {
+                                        resolvedSampleAnswer = matchedBankQuestion.sampleAnswer
+                                    }
+                                }
+
+                                val isMcq = qItem.optBoolean("isMCQ", false) || resolvedOptions.isNotEmpty()
+                                val finalOptions = if (resolvedOptions.isNotEmpty()) {
+                                    resolvedOptions
                                 } else if (isMcq) {
                                     listOf("Option A", "Option B", "Option C", "Option D")
                                 } else {
                                     emptyList()
                                 }
                                 val correctAnswerStr = qItem.optString("correctAnswer", "")
-                                var correctIdx = qItem.optInt("correctOptionIndex", -1)
+                                var correctIdx = resolvedCorrectIdx
                                 if (correctIdx == -1 && !correctAnswerStr.isNullOrBlank() && finalOptions.isNotEmpty()) {
                                     correctIdx = finalOptions.indexOf(correctAnswerStr)
                                 }
@@ -1376,11 +1419,17 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                 }
                                 quizQuestionsList.add(
                                     QuestionEntity(
-                                        id = qItem.optString("id").ifBlank { "q-${i}-${j}" },
-                                        questionText = qItem.optString("questionText").ifBlank { qItem.optString("question", "Question $j") },
-                                        category = qItem.optString("category", "Technical"),
-                                        difficulty = qItem.optString("difficulty", "Medium"),
-                                        sampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answer", "Sample answer") },
+                                        id = qId.ifBlank { "q-${i}-${j}" },
+                                        questionText = qItem.optString("questionText").ifBlank { 
+                                            matchedBankQuestion?.questionText ?: qItem.optString("question", "Question $j") 
+                                        },
+                                        category = qItem.optString("category").ifBlank { 
+                                            matchedBankQuestion?.category ?: "Technical" 
+                                        },
+                                        difficulty = qItem.optString("difficulty").ifBlank { 
+                                            matchedBankQuestion?.difficulty ?: "Medium" 
+                                        },
+                                        sampleAnswer = resolvedSampleAnswer.ifBlank { "Sample answer" },
                                         options = finalOptions,
                                         correctOptionIndex = correctIdx,
                                         isBookmarked = qItem.optBoolean("isBookmarked", false)
@@ -1580,6 +1629,21 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
 
     suspend fun createBlogPost(title: String, content: String, excerpt: String, tags: List<String>, imageUrl: String?): Pair<Boolean, String> {
         return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                val newBlog = BlogPostEntity(
+                    id = "blog-${UUID.randomUUID().toString().take(6)}",
+                    title = title,
+                    content = content,
+                    excerpt = excerpt,
+                    author = "You",
+                    date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date()) + "T12:00:00Z",
+                    imageUrl = imageUrl,
+                    tags = tags,
+                    bookmarkedBy = emptyList()
+                )
+                _blogPosts.value = listOf(newBlog) + _blogPosts.value
+                return@withContext Pair(true, "Blog post created successfully! (Sandbox Mode)")
+            }
             try {
                 val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
                 val res = apiService.createBlogPost(
@@ -1605,6 +1669,22 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
 
     suspend fun toggleBookmarkBlogPost(postId: String): Pair<Boolean, String> {
         return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                _blogPosts.value = _blogPosts.value.map {
+                    if (it.id == postId) {
+                        val currentlyBookmarked = it.bookmarkedBy.contains("user-alex-101")
+                        val newBookmarkedBy = if (currentlyBookmarked) {
+                            it.bookmarkedBy - "user-alex-101"
+                        } else {
+                            it.bookmarkedBy + "user-alex-101"
+                        }
+                        it.copy(bookmarkedBy = newBookmarkedBy)
+                    } else it
+                }
+                val isBookmarked = _blogPosts.value.find { it.id == postId }?.bookmarkedBy?.contains("user-alex-101") == true
+                val msg = if (isBookmarked) "Bookmark added! (Sandbox Mode)" else "Bookmark removed! (Sandbox Mode)"
+                return@withContext Pair(true, msg)
+            }
             try {
                 val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
                 val res = apiService.bookmarkBlogPost(ApiBlogBookmarkRequest(postId))
@@ -1613,6 +1693,77 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                     Pair(true, res.body()?.message ?: "Bookmark updated!")
                 } else {
                     Pair(false, res.body()?.message ?: "Failed to bookmark post")
+                }
+            } catch (e: Exception) {
+                Pair(false, e.localizedMessage ?: "Network error occurred")
+            }
+        }
+    }
+
+    suspend fun redeemPromoCode(code: String): Pair<Boolean, String> {
+        return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                val current = _walletState.value
+                val bonus = 100
+                val newCoins = current.coins + bonus
+                val newTx = WalletTransactionEntity(
+                    type = "CREDIT",
+                    amount = bonus,
+                    description = "Promo Code Redeemed (Sandbox Mode)",
+                    timestamp = System.currentTimeMillis()
+                )
+                _walletState.value = current.copy(
+                    coins = newCoins,
+                    transactions = listOf(newTx) + current.transactions
+                )
+                return@withContext Pair(true, "Promo code redeemed successfully! Earned 100 coins. (Sandbox Mode)")
+            }
+            try {
+                val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
+                val res = apiService.postWalletAction(ApiWalletPostRequest(action = "redeem", code = code))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    fetchWalletFromApi(apiService)
+                    Pair(true, res.body()?.message ?: "Promo code redeemed successfully!")
+                } else {
+                    Pair(false, res.body()?.message ?: "Failed to redeem promo code")
+                }
+            } catch (e: Exception) {
+                Pair(false, e.localizedMessage ?: "Network error occurred")
+            }
+        }
+    }
+
+    suspend fun purchaseStreakFreeze(): Pair<Boolean, String> {
+        return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                val current = _walletState.value
+                val cost = 500
+                if (current.coins < cost) {
+                    return@withContext Pair(false, "Insufficient coins. Costs 500 coins, you have ${current.coins}.")
+                }
+                val newCoins = current.coins - cost
+                val newFreezes = current.streakFreezes + 1
+                val newTx = WalletTransactionEntity(
+                    type = "DEBIT",
+                    amount = -cost,
+                    description = "Purchased Streak Shield (Sandbox Mode)",
+                    timestamp = System.currentTimeMillis()
+                )
+                _walletState.value = current.copy(
+                    coins = newCoins,
+                    streakFreezes = newFreezes,
+                    transactions = listOf(newTx) + current.transactions
+                )
+                return@withContext Pair(true, "Streak Shield purchased successfully! (Sandbox Mode)")
+            }
+            try {
+                val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
+                val res = apiService.postWalletAction(ApiWalletPostRequest(action = "purchase-streak-freeze"))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    fetchWalletFromApi(apiService)
+                    Pair(true, res.body()?.message ?: "Streak Shield purchased successfully!")
+                } else {
+                    Pair(false, res.body()?.message ?: "Failed to purchase Streak Shield")
                 }
             } catch (e: Exception) {
                 Pair(false, e.localizedMessage ?: "Network error occurred")

@@ -149,6 +149,7 @@ fun JobTraqMainContainer(
 
     var isSettingsScreenOpen by remember { mutableStateOf(false) }
     var isReferralsScreenOpen by remember { mutableStateOf(false) }
+    var isWalletScreenOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(selectedTab) {
         if (selectedTab != JobTraqTab.PREP_HUB) {
@@ -164,7 +165,7 @@ fun JobTraqMainContainer(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = !isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen,
+        gesturesEnabled = !isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen && !isWalletScreenOpen,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier.testTag("nav_drawer_sheet"),
@@ -307,6 +308,7 @@ fun JobTraqMainContainer(
                                 selectedTab = tab
                                 isSettingsScreenOpen = false
                                 isReferralsScreenOpen = false
+                                isWalletScreenOpen = false
                                 coroutineScope.launch { drawerState.close() }
                             },
                             colors = NavigationDrawerItemDefaults.colors(
@@ -374,6 +376,29 @@ fun JobTraqMainContainer(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
+                    // Wallet Drawer Action
+                    NavigationDrawerItem(
+                        label = { Text("Digital Wallet", fontSize = 15.sp) },
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Default.MonetizationOn,
+                                contentDescription = "Digital Wallet",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        selected = isWalletScreenOpen,
+                        onClick = {
+                            isWalletScreenOpen = true
+                            isSettingsScreenOpen = false
+                            isReferralsScreenOpen = false
+                            coroutineScope.launch { drawerState.close() }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .padding(vertical = 2.dp)
+                            .testTag("drawer_item_wallet")
+                    )
+
                     // Settings Drawer Action
                     NavigationDrawerItem(
                         label = { Text("Settings", fontSize = 15.sp) },
@@ -388,6 +413,7 @@ fun JobTraqMainContainer(
                         onClick = {
                             isSettingsScreenOpen = true
                             isReferralsScreenOpen = false
+                            isWalletScreenOpen = false
                             coroutineScope.launch { drawerState.close() }
                         },
                         shape = RoundedCornerShape(12.dp),
@@ -423,7 +449,7 @@ fun JobTraqMainContainer(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen) {
+                if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen && !isWalletScreenOpen) {
                     JobTraqTopBar(
                         currentLanguage = currentLanguage,
                         activeEnvironment = activeEnvironment,
@@ -434,7 +460,7 @@ fun JobTraqMainContainer(
                 }
             },
             bottomBar = {
-                if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen) {
+                if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen && !isWalletScreenOpen) {
                     JobTraqBottomNav(
                         selectedTab = selectedTab,
                         currentLanguage = currentLanguage,
@@ -447,7 +473,7 @@ fun JobTraqMainContainer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(if (isQuizActive || isSettingsScreenOpen || isReferralsScreenOpen) PaddingValues(0.dp) else innerPadding)
+                    .padding(if (isQuizActive || isSettingsScreenOpen || isReferralsScreenOpen || isWalletScreenOpen) PaddingValues(0.dp) else innerPadding)
             ) {
                 if (isSettingsScreenOpen) {
                     SettingsScreen(
@@ -490,6 +516,15 @@ fun JobTraqMainContainer(
                         },
                         onShowToast = { showToast(it) },
                         onBack = { isReferralsScreenOpen = false }
+                    )
+                } else if (isWalletScreenOpen) {
+                    WalletScreen(
+                        walletState = walletState,
+                        onRedeemCode = { code -> repository.redeemPromoCode(code) },
+                        onPurchaseStreakFreeze = { repository.purchaseStreakFreeze() },
+                        onBack = { isWalletScreenOpen = false },
+                        showToast = { showToast(it) },
+                        coroutineScope = coroutineScope
                     )
                 } else {
                     AnimatedContent(
@@ -701,7 +736,16 @@ fun JobTraqMainContainer(
                                     onLanguageSelected = { repository.setLanguage(it) },
                                     onOpenSettings = { isSettingsScreenOpen = true },
                                     onOpenReferrals = { isReferralsScreenOpen = true },
-                                    onReplayOnboarding = onReplayOnboarding
+                                    onReplayOnboarding = onReplayOnboarding,
+                                    walletTransactions = walletState.transactions,
+                                    questions = questions,
+                                    blogPosts = blogPosts,
+                                    onToggleQuestionBookmark = { qId -> repository.toggleBookmark(qId) },
+                                    onToggleBlogBookmark = { blogId ->
+                                        coroutineScope.launch {
+                                            repository.toggleBookmarkBlogPost(blogId)
+                                        }
+                                    }
                                 )
                             }
                         }
