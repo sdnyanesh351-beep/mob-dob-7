@@ -1375,6 +1375,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                         if (questionsArr != null && questionsArr.length() > 0) {
                             for (j in 0 until questionsArr.length()) {
                                 val qItem = questionsArr.getJSONObject(j)
+                                val qId = qItem.optString("id")
                                 val qOptionsArr = qItem.optJSONArray("mcqOptions") ?: qItem.optJSONArray("options")
                                 val qOptionsList = mutableListOf<String>()
                                 if (qOptionsArr != null) {
@@ -1382,16 +1383,34 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                         qOptionsList.add(qOptionsArr.getString(k))
                                     }
                                 }
-                                val isMcq = qItem.optBoolean("isMCQ", false) || qOptionsList.isNotEmpty()
-                                val finalOptions = if (qOptionsList.isNotEmpty()) {
-                                    qOptionsList
+                                
+                                var resolvedOptions = qOptionsList.toList()
+                                var resolvedCorrectIdx = qItem.optInt("correctOptionIndex", -1)
+                                var resolvedSampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answer", "") }
+                                
+                                val matchedBankQuestion = _questions.value.find { it.id == qId }
+                                if (matchedBankQuestion != null) {
+                                    if (resolvedOptions.isEmpty()) {
+                                        resolvedOptions = matchedBankQuestion.options
+                                    }
+                                    if (resolvedCorrectIdx == -1) {
+                                        resolvedCorrectIdx = matchedBankQuestion.correctOptionIndex
+                                    }
+                                    if (resolvedSampleAnswer.isBlank()) {
+                                        resolvedSampleAnswer = matchedBankQuestion.sampleAnswer
+                                    }
+                                }
+
+                                val isMcq = qItem.optBoolean("isMCQ", false) || resolvedOptions.isNotEmpty()
+                                val finalOptions = if (resolvedOptions.isNotEmpty()) {
+                                    resolvedOptions
                                 } else if (isMcq) {
                                     listOf("Option A", "Option B", "Option C", "Option D")
                                 } else {
                                     emptyList()
                                 }
                                 val correctAnswerStr = qItem.optString("correctAnswer", "")
-                                var correctIdx = qItem.optInt("correctOptionIndex", -1)
+                                var correctIdx = resolvedCorrectIdx
                                 if (correctIdx == -1 && !correctAnswerStr.isNullOrBlank() && finalOptions.isNotEmpty()) {
                                     correctIdx = finalOptions.indexOf(correctAnswerStr)
                                 }
@@ -1400,11 +1419,17 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                 }
                                 quizQuestionsList.add(
                                     QuestionEntity(
-                                        id = qItem.optString("id").ifBlank { "q-${i}-${j}" },
-                                        questionText = qItem.optString("questionText").ifBlank { qItem.optString("question", "Question $j") },
-                                        category = qItem.optString("category", "Technical"),
-                                        difficulty = qItem.optString("difficulty", "Medium"),
-                                        sampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answer", "Sample answer") },
+                                        id = qId.ifBlank { "q-${i}-${j}" },
+                                        questionText = qItem.optString("questionText").ifBlank { 
+                                            matchedBankQuestion?.questionText ?: qItem.optString("question", "Question $j") 
+                                        },
+                                        category = qItem.optString("category").ifBlank { 
+                                            matchedBankQuestion?.category ?: "Technical" 
+                                        },
+                                        difficulty = qItem.optString("difficulty").ifBlank { 
+                                            matchedBankQuestion?.difficulty ?: "Medium" 
+                                        },
+                                        sampleAnswer = resolvedSampleAnswer.ifBlank { "Sample answer" },
                                         options = finalOptions,
                                         correctOptionIndex = correctIdx,
                                         isBookmarked = qItem.optBoolean("isBookmarked", false)
