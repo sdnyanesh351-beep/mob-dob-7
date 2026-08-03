@@ -1699,5 +1699,76 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             }
         }
     }
+
+    suspend fun redeemPromoCode(code: String): Pair<Boolean, String> {
+        return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                val current = _walletState.value
+                val bonus = 100
+                val newCoins = current.coins + bonus
+                val newTx = WalletTransactionEntity(
+                    type = "CREDIT",
+                    amount = bonus,
+                    description = "Promo Code Redeemed (Sandbox Mode)",
+                    timestamp = System.currentTimeMillis()
+                )
+                _walletState.value = current.copy(
+                    coins = newCoins,
+                    transactions = listOf(newTx) + current.transactions
+                )
+                return@withContext Pair(true, "Promo code redeemed successfully! Earned 100 coins. (Sandbox Mode)")
+            }
+            try {
+                val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
+                val res = apiService.postWalletAction(ApiWalletPostRequest(action = "redeem", code = code))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    fetchWalletFromApi(apiService)
+                    Pair(true, res.body()?.message ?: "Promo code redeemed successfully!")
+                } else {
+                    Pair(false, res.body()?.message ?: "Failed to redeem promo code")
+                }
+            } catch (e: Exception) {
+                Pair(false, e.localizedMessage ?: "Network error occurred")
+            }
+        }
+    }
+
+    suspend fun purchaseStreakFreeze(): Pair<Boolean, String> {
+        return withContext(Dispatchers.IO) {
+            if (_currentEnvironment.value.isDummyDataAllowed) {
+                val current = _walletState.value
+                val cost = 500
+                if (current.coins < cost) {
+                    return@withContext Pair(false, "Insufficient coins. Costs 500 coins, you have ${current.coins}.")
+                }
+                val newCoins = current.coins - cost
+                val newFreezes = current.streakFreezes + 1
+                val newTx = WalletTransactionEntity(
+                    type = "DEBIT",
+                    amount = -cost,
+                    description = "Purchased Streak Shield (Sandbox Mode)",
+                    timestamp = System.currentTimeMillis()
+                )
+                _walletState.value = current.copy(
+                    coins = newCoins,
+                    streakFreezes = newFreezes,
+                    transactions = listOf(newTx) + current.transactions
+                )
+                return@withContext Pair(true, "Streak Shield purchased successfully! (Sandbox Mode)")
+            }
+            try {
+                val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
+                val res = apiService.postWalletAction(ApiWalletPostRequest(action = "purchase-streak-freeze"))
+                if (res.isSuccessful && res.body()?.success == true) {
+                    fetchWalletFromApi(apiService)
+                    Pair(true, res.body()?.message ?: "Streak Shield purchased successfully!")
+                } else {
+                    Pair(false, res.body()?.message ?: "Failed to purchase Streak Shield")
+                }
+            } catch (e: Exception) {
+                Pair(false, e.localizedMessage ?: "Network error occurred")
+            }
+        }
+    }
 }
 
