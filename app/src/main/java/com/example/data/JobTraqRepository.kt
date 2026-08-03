@@ -1333,7 +1333,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                 questionText = item.optString("questionText").ifBlank { item.optString("question", "Question $i") },
                                 category = item.optString("category", "Technical"),
                                 difficulty = item.optString("difficulty", "Medium"),
-                                sampleAnswer = item.optString("sampleAnswer").ifBlank { item.optString("answer", "Sample answer") },
+                                sampleAnswer = item.optString("sampleAnswer").ifBlank { item.optString("answerOrTip") }.ifBlank { item.optString("answer", "Sample answer") },
                                 options = finalOptions,
                                 correctOptionIndex = correctIdx,
                                 isBookmarked = item.optBoolean("isBookmarked", false)
@@ -1386,7 +1386,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                                 
                                 var resolvedOptions = qOptionsList.toList()
                                 var resolvedCorrectIdx = qItem.optInt("correctOptionIndex", -1)
-                                var resolvedSampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answer", "") }
+                                var resolvedSampleAnswer = qItem.optString("sampleAnswer").ifBlank { qItem.optString("answerOrTip") }.ifBlank { qItem.optString("answer", "") }
                                 
                                 val matchedBankQuestion = _questions.value.find { it.id == qId }
                                 if (matchedBankQuestion != null) {

@@ -18,7 +18,7 @@ object I18nHelper {
             "community_feed" to "Community Feed",
             "rewards" to "Rewards & Wallet",
             "resume_analyzer" to "AI Resume Analyzer",
-            "offline_status" to "Synced • Offline Ready",
+            "offline_status" to "Synced",
             "daily_challenge" to "Daily Interview Challenge"
         ),
         "hi" to mapOf(
