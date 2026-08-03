@@ -87,7 +87,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         }
     }
 
-    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 20) = withContext(Dispatchers.IO) {
+    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 1000) = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) return@withContext
         try {
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
@@ -1146,7 +1146,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             val apiService = RetrofitClient.createApiService(cleanUrl, sessionManager)
             fetchJobsFromApi(apiService)
             fetchCommunityPostsFromApi(apiService)
-            fetchQuestionsFromApi(apiService)
+            fetchQuestionsFromApi(apiService, page = 1, limit = 1000)
             fetchQuizzesFromApi(apiService)
             fetchInterviewsFromApi(apiService)
             fetchReferralsFromApi(apiService)
@@ -1289,7 +1289,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         }
     }
 
-    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 20) {
+    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 1000) {
         try {
             val res = apiService.getQuestions(page = page, limit = limit)
             if (res.isSuccessful && res.body() != null) {
