@@ -90,7 +90,7 @@ fun Phase3CommunityScreen(
     onShowToast: (String) -> Unit
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Feed, 1: Mentors, 2: Gamification, 3: Wallet
-    val subTabs = listOf("Feed", "Alumni Mentors", "Gamification", "Wallet")
+    val subTabs = listOf("Feed", "Alumni", "Gamification", "Wallet")
 
     Column(
         modifier = Modifier
