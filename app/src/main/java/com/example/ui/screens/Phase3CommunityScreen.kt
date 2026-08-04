@@ -102,16 +102,24 @@ fun Phase3CommunityScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         // Tab Row
-        TabRow(
+        ScrollableTabRow(
             selectedTabIndex = selectedSubTab,
             containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary
+            contentColor = MaterialTheme.colorScheme.primary,
+            edgePadding = 16.dp
         ) {
             subTabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedSubTab == index,
                     onClick = { selectedSubTab = index },
-                    text = { Text(title, fontWeight = FontWeight.Bold) }
+                    text = {
+                        Text(
+                            text = title,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 )
             }
         }
