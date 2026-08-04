@@ -491,6 +491,10 @@ class AuthRepository(private val userDao: UserDao) {
         return userDao.getUserByEmail(email.trim().lowercase())
     }
 
+    suspend fun getUserById(userId: Long): UserEntity? {
+        return userDao.getUserById(userId)
+    }
+
     fun getUserFlow(userId: Long): Flow<UserEntity?> {
         return userDao.getUserByIdFlow(userId)
     }

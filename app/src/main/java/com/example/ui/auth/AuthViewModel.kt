@@ -936,8 +936,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             result.onSuccess { userId ->
-                val demoEmail = "${providerName.lowercase()}user@google.com"
-                val user = repository.getUserByEmail(demoEmail)
+                val user = repository.getUserById(userId)
                 if (user != null) {
                     sessionManager.saveLoginSession(
                         token = "mock-google-token-${user.id}",
