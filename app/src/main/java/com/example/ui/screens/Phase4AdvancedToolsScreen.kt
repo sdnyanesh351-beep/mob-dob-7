@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -749,9 +750,8 @@ private fun ResumeScanHistorySection(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(filteredScans, key = { it.id }) { scan ->
-                    key(scan.id) {
-                        var showMenu by remember { mutableStateOf(false) }
-                        Card(
+                    var showMenu by remember { mutableStateOf(false) }
+                    Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animateItemPlacementCompat(),
@@ -862,7 +862,6 @@ private fun ResumeScanHistorySection(
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -877,6 +876,7 @@ private fun ResumeScanHistorySection(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ScanReportDialog(
     scan: ResumeScanHistoryEntity,
@@ -1067,7 +1067,7 @@ private fun ScanHistorySummaryStatCard(
 
 @Composable
 private fun Modifier.horizontalScrollCompat(): Modifier = this.then(
-    androidx.compose.foundation.horizontalScroll(rememberScrollState())
+    horizontalScroll(rememberScrollState())
 )
 
 @Composable

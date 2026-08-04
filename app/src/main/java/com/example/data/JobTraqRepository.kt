@@ -1079,10 +1079,11 @@ class JobTraqRepository(
         val newScanId = "scan-${UUID.randomUUID().toString().take(8)}"
         val nowMs = System.currentTimeMillis()
         val extractedJobTitle = if (jobDescription.length > 60) jobDescription.take(60) + "..." else jobDescription.ifBlank { "Custom ATS Analysis" }
+        val currentUserId = try { sessionManager?.currentSession()?.userId?.toString() ?: "" } catch (_: Exception) { "" }
         val newScanHistory = ResumeScanHistoryEntity(
             id = newScanId,
             tenantId = _currentTenant.value,
-            userId = sessionManager?.userId?.toString() ?: "",
+            userId = currentUserId,
             resumeId = resumeId,
             resumeName = resume.title,
             jobTitle = extractedJobTitle,
