@@ -437,6 +437,10 @@ fun QuizPlayerView(
     val markedForReview = remember { mutableStateMapOf<String, Boolean>() }
     val bookmarkedQuestions = remember { mutableStateMapOf<String, Boolean>() }
 
+    // Question Feedback & Rating States
+    val questionRatings = remember { mutableStateMapOf<String, Int>() }
+    val questionFeedbacks = remember { mutableStateMapOf<String, String>() }
+
     val buildQuizResult: () -> QuizResult = {
         var correctCount = 0
         quiz.questions.forEach { q ->
@@ -477,10 +481,6 @@ fun QuizPlayerView(
             }
         }
     }
-
-    // Question Feedback & Rating States
-    val questionRatings = remember { mutableStateMapOf<String, Int>() }
-    val questionFeedbacks = remember { mutableStateMapOf<String, String>() }
 
     var isInstantFeedbackEnabled by remember(initialInstantFeedbackEnabled) { mutableStateOf(initialInstantFeedbackEnabled) }
     var isFullscreen by remember { mutableStateOf(false) }
