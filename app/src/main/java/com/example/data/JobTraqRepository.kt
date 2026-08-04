@@ -772,7 +772,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             try {
                 val apiService = RetrofitClient.createApiService(_baseUrl.value, sessionManager)
                 val mappedOptions = pollOptions?.map { ApiPollOptionDto(it, 0) }
-                apiService.createCommunityPost(
+                val response = apiService.createCommunityPost(
                     request = ApiCreatePostRequest(
                         title = title.ifBlank { "Discussion" },
                         content = content,
@@ -784,6 +784,9 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                         capacity = capacity
                     )
                 )
+                if (response.isSuccessful) {
+                    fetchCommunityPostsFromApi(_baseUrl.value)
+                }
             } catch (e: Exception) {}
         }
     }
@@ -795,6 +798,19 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                 val count = if (liked) it.likesCount + 1 else (it.likesCount - 1).coerceAtLeast(0)
                 it.copy(isLiked = liked, likesCount = count)
             } else it
+        }
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.toggleCommunityPostLike(ApiToggleLikeRequest(postId = postId))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -817,7 +833,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
 
         val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
         val baseUrl = _baseUrl.value
-        if (!isDummyAllowed && baseUrl.isNotBlank() && !postId.startsWith("post-")) {
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
             apiScope.launch {
                 try {
                     val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)

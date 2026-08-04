@@ -178,6 +178,10 @@ data class ApiCreateCommentRequest(
     val text: String
 )
 
+data class ApiToggleLikeRequest(
+    val postId: String
+)
+
 data class ApiCreateResumeRequest(
     val title: String,
     val content: String
@@ -355,6 +359,9 @@ interface JobTraqMobileApiService {
 
     @POST("api/community/comments")
     suspend fun addCommunityComment(@Body request: ApiCreateCommentRequest): Response<ApiStandardResponse>
+
+    @POST("api/community/posts/like")
+    suspend fun toggleCommunityPostLike(@Body request: ApiToggleLikeRequest): Response<ApiStandardResponse>
 
     @GET("api/resumes")
     suspend fun getResumes(): Response<ResponseBody>
