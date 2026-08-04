@@ -173,6 +173,16 @@ data class ApiCreatePostRequest(
     val capacity: Int? = null
 )
 
+data class ApiCreateCommentRequest(
+    val postId: String,
+    val text: String
+)
+
+data class ApiCreateResumeRequest(
+    val title: String,
+    val content: String
+)
+
 // --- Blog DTOs ---
 data class ApiBlogPostDto(
     val id: String,
@@ -326,6 +336,15 @@ interface JobTraqMobileApiService {
 
     @POST("api/community/posts")
     suspend fun createCommunityPost(@Body request: ApiCreatePostRequest): Response<ApiStandardResponse>
+
+    @POST("api/community/comments")
+    suspend fun addCommunityComment(@Body request: ApiCreateCommentRequest): Response<ApiStandardResponse>
+
+    @GET("api/resumes")
+    suspend fun getResumes(): Response<ResponseBody>
+
+    @POST("api/resumes")
+    suspend fun createResume(@Body request: ApiCreateResumeRequest): Response<ApiStandardResponse>
 
     // 8. Job Applications Tracker
     @GET("api/jobs/applications")

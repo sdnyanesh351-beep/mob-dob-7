@@ -609,6 +609,19 @@ fun JobTraqMainContainer(
                                         coroutineScope.launch {
                                             val tenant = currentTenant.ifBlank { "platform" }
                                             interviewDao.insertOrUpdate(scheduledInterview.copy(tenantId = tenant))
+                                            
+                                            if (scheduledInterview.type == "AI_MOCK") {
+                                                val topic = scheduledInterview.jobTitle
+                                                val difficulty = if (scheduledInterview.notes.contains("Hard")) "Hard" else if (scheduledInterview.notes.contains("Easy")) "Easy" else "Medium"
+                                                val instantFeedback = scheduledInterview.notes.contains("Feedback: Enabled")
+                                                
+                                                repository.scheduleInterviewOnServer(
+                                                    topic = topic,
+                                                    difficulty = difficulty,
+                                                    durationMins = 120,
+                                                    instantFeedback = instantFeedback
+                                                )
+                                            }
                                         }
                                     },
                                     onShowToast = { showToast(it) }

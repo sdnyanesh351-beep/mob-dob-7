@@ -72,6 +72,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         fetchReferralHistoryFromApi(base)
         fetchWalletFromApi(base)
         fetchSettingsFromApi(base)
+        fetchResumesFromApi(base)
     }
 
     suspend fun fetchJobsFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
@@ -137,6 +138,38 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                 // TODO: Parse API response and apply user settings once backend schema is finalized
             }
         } catch (e: Exception) { /* Leave defaults for DEV/PROD */ }
+    }
+
+    suspend fun fetchResumesFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            val res = apiService.getResumes()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val obj = org.json.JSONObject(jsonStr)
+                val jsonArray = obj.optJSONArray("resumes")
+                if (jsonArray != null && jsonArray.length() > 0) {
+                    val list = mutableListOf<ResumeEntity>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        list.add(
+                            ResumeEntity(
+                                id = item.optString("id"),
+                                title = item.optString("name"),
+                                targetRole = "Software Engineer",
+                                content = item.optString("resumeText"),
+                                matchScore = 85,
+                                feedback = "Synced from server profile."
+                            )
+                        )
+                    }
+                    _resumes.value = list
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun loadTestDummyData() {
@@ -594,6 +627,39 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         }
     }
 
+    suspend fun scheduleInterviewOnServer(
+        topic: String,
+        difficulty: String,
+        durationMins: Int,
+        instantFeedback: Boolean
+    ): Result<Unit> {
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (isDummyAllowed || baseUrl.isBlank()) return Result.success(Unit)
+        
+        return withContext(Dispatchers.IO) {
+            try {
+                val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                val request = ApiCreateInterviewRequest(
+                    topic = topic,
+                    description = "AI Audio Practice Room Session",
+                    difficulty = difficulty,
+                    timerPerQuestion = durationMins,
+                    questionCategories = listOf(topic),
+                    instantFeedback = instantFeedback
+                )
+                val res = apiService.createInterview(request)
+                if (res.isSuccessful && res.body()?.success == true) {
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("Failed to schedule interview: ${res.message()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+    }
+
     fun createQuiz(title: String, description: String, selectedQuestions: List<QuestionEntity>) {
         val newQuiz = QuizEntity(
             id = "quiz-${UUID.randomUUID().toString().take(6)}",
@@ -708,6 +774,19 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                 )
             } else it
         }
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank() && !postId.startsWith("post-")) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.addCommunityComment(ApiCreateCommentRequest(postId = postId, text = commentText))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     // Resume Operations
@@ -721,6 +800,19 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             feedback = "Resume created successfully. Run AI Analyzer with a job description for tailored match scoring!"
         )
         _resumes.value = listOf(newRes) + _resumes.value
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.createResume(ApiCreateResumeRequest(title = title, content = content))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     // Gemini AI ATS Resume Analysis
