@@ -419,8 +419,7 @@ class AuthRepository(private val userDao: UserDao) {
                             val existing = userDao.getUserByEmail(apiUser.email)
                             if (existing != null) {
                                 val updated = existing.copy(
-                                    fullName = apiUser.name,
-                                    tenantId = apiUser.tenantId
+                                    fullName = apiUser.name
                                 )
                                 userDao.updateUser(updated)
                                 return Result.success(existing.id)
