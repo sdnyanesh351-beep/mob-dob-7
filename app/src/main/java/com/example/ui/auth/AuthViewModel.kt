@@ -963,7 +963,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun triggerSocialAuth(providerName: String) {
+    fun triggerSocialAuth(providerName: String, action: String = "login") {
         val tenant = _uiState.value.selectedTenant
         val isDummyAllowed = _uiState.value.activeEnvironment.isDummyDataAllowed
         val baseUrl = _uiState.value.baseUrl
@@ -980,7 +980,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             val mockToken = "mock-google-token-${providerName.lowercase()}user@google.com|${providerName} User|https://lh3.googleusercontent.com/a/default-user"
             val result = repository.authenticateWithGoogle(
                 idToken = mockToken,
-                action = "login",
+                action = action,
                 baseUrl = baseUrl,
                 tenantId = tenant,
                 isDummyDataAllowed = isDummyAllowed

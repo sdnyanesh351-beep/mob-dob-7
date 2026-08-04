@@ -52,6 +52,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -83,6 +84,7 @@ fun Phase4AdvancedToolsScreen(
     resumes: List<ResumeEntity>,
     scanHistory: List<ResumeScanReportEntity> = emptyList(),
     coverLetters: List<CoverLetterEntity> = emptyList(),
+    activityLogs: List<String> = emptyList(),
     onAddResume: (String, String, String) -> Unit,
     onAnalyzeResume: suspend (String, String) -> ResumeEntity,
     onGenerateCoverLetter: suspend (String, String, String, String) -> CoverLetterEntity = { _, _, _, _ ->
@@ -98,15 +100,24 @@ fun Phase4AdvancedToolsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        TabRow(
+        ScrollableTabRow(
             selectedTabIndex = selectedSubTab,
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surface,
+            edgePadding = 16.dp
         ) {
             subTabs.forEachIndexed { index, title ->
                 Tab(
                     selected = selectedSubTab == index,
                     onClick = { selectedSubTab = index },
-                    text = { Text(title, fontWeight = if (selectedSubTab == index) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp) },
+                    text = {
+                        Text(
+                            text = title,
+                            fontWeight = if (selectedSubTab == index) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    },
                     modifier = Modifier.testTag("tools_subtab_$index")
                 )
             }
@@ -125,7 +136,7 @@ fun Phase4AdvancedToolsScreen(
                 onGenerateCoverLetter = onGenerateCoverLetter,
                 onShowToast = onShowToast
             )
-            2 -> ActivityLogSection()
+            2 -> ActivityLogSection(logs = activityLogs)
         }
     }
 }
@@ -390,15 +401,7 @@ private fun ResumesAndAiSection(
 }
 
 @Composable
-private fun ActivityLogSection() {
-
-    val logs = listOf(
-        "Logged in via Secure JWT Auth",
-        "Submitted Daily Interview Challenge (+50 XP)",
-        "Added new Job Application: 'TechCorp Inc'",
-        "Updated Job Status to 'Interviewing'",
-        "Ran Gemini AI ATS Resume Analysis"
-    )
+private fun ActivityLogSection(logs: List<String>) {
 
     Column(
         modifier = Modifier

@@ -134,7 +134,7 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                             WelcomeScreen(
                                 onNavigateToLogin = { viewModel.navigateTo(AuthScreenMode.LOGIN) },
                                 onNavigateToSignup = { viewModel.navigateTo(AuthScreenMode.SIGNUP) },
-                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider) },
+                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider, "login") },
                                 onNavigateToOnboarding = { viewModel.navigateTo(AuthScreenMode.ONBOARDING) },
                                 onNavigateToBaseUrlConfig = { viewModel.navigateTo(AuthScreenMode.BASE_URL_CONFIG) }
                             )
@@ -155,7 +155,7 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                                 onSelectTenant = viewModel::onSelectTenant,
                                 onTenantSearchQueryChanged = viewModel::onTenantSearchQueryChanged,
                                 onNavigateToBaseUrlConfig = { viewModel.navigateTo(AuthScreenMode.BASE_URL_CONFIG) },
-                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider) }
+                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider, "login") }
                             )
                         }
 
@@ -178,7 +178,7 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                                 onNavigateBack = { viewModel.navigateTo(AuthScreenMode.WELCOME) },
                                 onSelectTenant = viewModel::onSelectTenant,
                                 onTenantSearchQueryChanged = viewModel::onTenantSearchQueryChanged,
-                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider) }
+                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider, "signup") }
                             )
                         }
 

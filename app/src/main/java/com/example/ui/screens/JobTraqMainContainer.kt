@@ -147,6 +147,7 @@ fun JobTraqMainContainer(
     val referrals by repository.referrals.collectAsStateWithLifecycle()
     val referralLeaderboard by repository.referralLeaderboard.collectAsStateWithLifecycle()
     val referralActivityLogs by repository.referralActivityLogs.collectAsStateWithLifecycle()
+    val activityLogs by repository.activityLogs.collectAsStateWithLifecycle()
 
     var isSettingsScreenOpen by remember { mutableStateOf(false) }
     var isReferralsScreenOpen by remember { mutableStateOf(false) }
@@ -688,6 +689,7 @@ fun JobTraqMainContainer(
                                     resumes = resumes,
                                     scanHistory = resumeScanHistory,
                                     coverLetters = coverLetters,
+                                    activityLogs = activityLogs,
                                     onAddResume = { title, role, content ->
                                         repository.addResume(title, role, content)
                                         showToast("Resume '$title' saved!")

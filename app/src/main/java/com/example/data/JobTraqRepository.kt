@@ -439,6 +439,15 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
     private val _dailyStreakState = MutableStateFlow(DailyStreakNotificationState())
     val dailyStreakState: StateFlow<DailyStreakNotificationState> = _dailyStreakState.asStateFlow()
 
+    private val _activityLogs = MutableStateFlow<List<String>>(listOf(
+        "Logged in via Secure JWT Auth",
+        "Submitted Daily Interview Challenge (+50 XP)",
+        "Added new Job Application: 'TechCorp Inc'",
+        "Updated Job Status to 'Interviewing'",
+        "Ran Gemini AI ATS Resume Analysis"
+    ))
+    val activityLogs: StateFlow<List<String>> = _activityLogs.asStateFlow()
+
     fun completeDailyChallenge(xpEarned: Int = 50) {
         val current = _dailyStreakState.value
         val isFirstTimeToday = !current.dailyChallengeCompletedToday
@@ -1766,6 +1775,22 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                     _dailyStreakState.value = _dailyStreakState.value.copy(
                         streakDays = progress.dayStreak
                     )
+
+                    val activityLogsList = mutableListOf<String>()
+                    dataObj?.activities?.forEach { anyItem ->
+                        try {
+                            val map = anyItem as? Map<*, *>
+                            if (map != null) {
+                                val desc = map["description"] as? String
+                                if (desc != null && desc.isNotBlank()) {
+                                    activityLogsList.add(desc)
+                                }
+                            }
+                        } catch (e: Exception) {}
+                    }
+                    if (activityLogsList.isNotEmpty()) {
+                        _activityLogs.value = activityLogsList
+                    }
                 }
             }
         } catch (e: Exception) {}
