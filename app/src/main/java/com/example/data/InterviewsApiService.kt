@@ -693,15 +693,26 @@ class InterviewsRepository(
 }
 
 private fun normalizeInterviewsResponse(response: InterviewsResponse): InterviewsResponse {
-    val total = response.totalInterviews.takeIf { it > 0 } ?: response.interviews.size
-    val up = response.upcomingCount.takeIf { it >= 0 } ?: response.interviews.count { it.status.equals("Upcoming", ignoreCase = true) }
-    val done = response.completedCount.takeIf { it >= 0 } ?: response.interviews.count { it.status.equals("Completed", ignoreCase = true) }
-    val cancelled = response.cancelledCount.takeIf { it >= 0 } ?: response.interviews.count { it.status.equals("Cancelled", ignoreCase = true) }
+    val nonQuizInterviews = response.interviews.filter {
+        it.type != "QUIZ" &&
+        !it.jobTitle.contains("quiz", ignoreCase = true) &&
+        !it.companyName.contains("quiz", ignoreCase = true)
+    }
+    val up = nonQuizInterviews.count {
+        it.status.equals("Upcoming", ignoreCase = true) || it.status.equals("Scheduled", ignoreCase = true)
+    }
+    val done = nonQuizInterviews.count {
+        it.status.equals("Completed", ignoreCase = true) || it.status.equals("Past", ignoreCase = true)
+    }
+    val cancelled = nonQuizInterviews.count {
+        it.status.equals("Cancelled", ignoreCase = true)
+    }
     return response.copy(
-        totalInterviews = total,
+        totalInterviews = nonQuizInterviews.size,
         upcomingCount = up,
         completedCount = done,
         cancelledCount = cancelled,
+        interviews = nonQuizInterviews,
         endpoint = response.endpoint.ifBlank { "/api/interviews" },
         status = response.status.ifBlank { "success" }
     )
