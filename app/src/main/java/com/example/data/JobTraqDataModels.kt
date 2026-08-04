@@ -45,7 +45,9 @@ data class QuizResult(
     val durationSeconds: Int = 120,
     val isChallengeMode: Boolean = true,
     val markedForReviewIds: Set<String> = emptySet(),
-    val bookmarkedIds: Set<String> = emptySet()
+    val bookmarkedIds: Set<String> = emptySet(),
+    val questionRatings: Map<String, Int> = emptyMap(),
+    val questionFeedbacks: Map<String, String> = emptyMap()
 )
 
 data class CommentEntity(

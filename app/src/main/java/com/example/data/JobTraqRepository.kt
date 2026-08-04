@@ -620,6 +620,28 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                         tagStats = tagStats
                     )
                     apiService.completeQuiz(request)
+
+                    // Sync individual question ratings
+                    result.questionRatings.forEach { (qId, rating) ->
+                        if (rating > 0) {
+                            try {
+                                apiService.rateQuestion(ApiRateQuestionRequest(questionId = qId, rating = rating))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+
+                    // Sync individual question feedback comments
+                    result.questionFeedbacks.forEach { (qId, feedback) ->
+                        if (feedback.isNotBlank()) {
+                            try {
+                                apiService.commentQuestion(ApiCommentQuestionRequest(questionId = qId, commentText = feedback))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }

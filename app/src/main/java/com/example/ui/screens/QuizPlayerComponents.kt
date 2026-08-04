@@ -458,7 +458,9 @@ fun QuizPlayerView(
             durationSeconds = 115,
             isChallengeMode = isChallengeMode,
             markedForReviewIds = markedForReview.filterValues { it }.keys,
-            bookmarkedIds = bookmarkedQuestions.filterValues { it }.keys
+            bookmarkedIds = bookmarkedQuestions.filterValues { it }.keys,
+            questionRatings = questionRatings.toMap(),
+            questionFeedbacks = questionFeedbacks.toMap()
         )
     }
 

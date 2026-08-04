@@ -183,6 +183,16 @@ data class ApiCreateResumeRequest(
     val content: String
 )
 
+data class ApiRateQuestionRequest(
+    val questionId: String,
+    val rating: Int
+)
+
+data class ApiCommentQuestionRequest(
+    val questionId: String,
+    val commentText: String
+)
+
 // --- Blog DTOs ---
 data class ApiBlogPostDto(
     val id: String,
@@ -316,6 +326,12 @@ interface JobTraqMobileApiService {
 
     @POST("api/questions/bookmark")
     suspend fun bookmarkQuestion(@Body request: ApiBookmarkRequest): Response<ApiStandardResponse>
+
+    @POST("api/questions/rate")
+    suspend fun rateQuestion(@Body request: ApiRateQuestionRequest): Response<ApiStandardResponse>
+
+    @POST("api/questions/comment")
+    suspend fun commentQuestion(@Body request: ApiCommentQuestionRequest): Response<ApiStandardResponse>
 
     // 6. Referrals & Engagement
     @GET("api/referrals/history")

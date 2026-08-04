@@ -36,6 +36,7 @@ import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.OnboardingScreen
 import com.example.ui.screens.ProfileDashboardScreen
 import com.example.ui.screens.SignupScreen
+import com.example.ui.screens.SplashScreen
 import com.example.ui.screens.TermsAndConditionsDialog
 import com.example.ui.screens.WelcomeScreen
 import com.example.ui.theme.AuthTheme
