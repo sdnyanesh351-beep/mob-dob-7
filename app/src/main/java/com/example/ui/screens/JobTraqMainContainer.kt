@@ -93,8 +93,7 @@ fun JobTraqMainContainer(
     activeEnvironment: AppEnvironment = AppEnvironment.DEV,
     onEnvironmentSelected: (AppEnvironment) -> Unit = {},
     baseUrl: String = AppEnvironment.DEV.defaultBaseUrl,
-    sessionManager: SessionManager? = null,
-    repository: JobTraqRepository = remember(sessionManager) { JobTraqRepository(sessionManager) }
+    sessionManager: SessionManager? = null
 ) {
     var selectedTab by remember { mutableStateOf(JobTraqTab.PIPELINE) }
     var isQuizActive by remember { mutableStateOf(false) }
@@ -104,7 +103,12 @@ fun JobTraqMainContainer(
 
     val context = LocalContext.current
     val interviewDao = remember(context) { AuthDatabase.getDatabase(context).interviewDao() }
+    val resumeScanHistoryDao = remember(context) { AuthDatabase.getDatabase(context).resumeScanHistoryDao() }
     val streakDataStoreManager = remember(context) { StreakDataStoreManager(context) }
+
+    val repository = remember(sessionManager, resumeScanHistoryDao) {
+        JobTraqRepository(sessionManager, resumeScanHistoryDao)
+    }
 
     val streakData by streakDataStoreManager.streakDataFlow.collectAsStateWithLifecycle(initialValue = StreakData())
 
@@ -699,6 +703,23 @@ fun JobTraqMainContainer(
                                     },
                                     onGenerateCoverLetter = { comp, title, jd, resText ->
                                         repository.generateCoverLetterWithAI(comp, title, jd, resText)
+                                    },
+                                    onToggleScanBookmark = { scanId ->
+                                        repository.toggleScanBookmark(scanId)
+                                        val item = resumeScanHistory.find { it.id == scanId }
+                                        showToast(if (item?.bookmarked == true) "Bookmark removed" else "Scan bookmarked")
+                                    },
+                                    onDeleteScan = { scanId ->
+                                        repository.deleteScanHistoryItem(scanId)
+                                        showToast("Scan deleted")
+                                    },
+                                    onViewScanReport = { scan ->
+                                        val feedback = scan.extractSummaryFeedback()
+                                        if (feedback.isNotBlank()) {
+                                            showToast("Report loaded: ${feedback.take(80)}...")
+                                        } else {
+                                            showToast("Report data unavailable for this scan")
+                                        }
                                     },
                                     onShowToast = { showToast(it) }
                                 )

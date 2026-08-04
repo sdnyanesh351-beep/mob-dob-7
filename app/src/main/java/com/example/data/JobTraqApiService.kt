@@ -187,6 +187,46 @@ data class ApiCreateResumeRequest(
     val content: String
 )
 
+// --- Resume Scan History DTOs ---
+data class ApiResumeScanHistoryDto(
+    val id: String? = null,
+    val tenantId: String? = null,
+    val userId: String? = null,
+    val resumeId: String? = null,
+    val resumeName: String? = null,
+    val jobTitle: String? = null,
+    val companyName: String? = null,
+    val scanDate: String? = null,
+    val matchScore: Int? = null,
+    val resumeTextSnapshot: String? = null,
+    val jobDescriptionText: String? = null,
+    val reportData: Any? = null,
+    val bookmarked: Boolean? = null
+)
+
+data class ApiResumeScanHistoryResponse(
+    val success: Boolean = true,
+    val message: String? = null,
+    val data: List<ApiResumeScanHistoryDto>? = null,
+    val scanHistory: List<ApiResumeScanHistoryDto>? = null
+)
+
+data class ApiUpdateScanBookmarkRequest(
+    val scanId: String,
+    val bookmarked: Boolean
+)
+
+data class ApiCreateScanHistoryRequest(
+    val resumeId: String,
+    val resumeName: String,
+    val jobTitle: String,
+    val companyName: String,
+    val matchScore: Int,
+    val resumeTextSnapshot: String,
+    val jobDescriptionText: String,
+    val reportData: Any? = null
+)
+
 data class ApiRateQuestionRequest(
     val questionId: String,
     val rating: Int
@@ -368,6 +408,22 @@ interface JobTraqMobileApiService {
 
     @POST("api/resumes")
     suspend fun createResume(@Body request: ApiCreateResumeRequest): Response<ApiStandardResponse>
+
+    // Resume Scan History endpoints
+    @GET("api/resumes/scan-history")
+    suspend fun getScanHistory(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 100
+    ): Response<ResponseBody>
+
+    @POST("api/resumes/scan-history")
+    suspend fun createScanHistory(@Body request: ApiCreateScanHistoryRequest): Response<ApiStandardResponse>
+
+    @PUT("api/resumes/scan-history")
+    suspend fun updateScanBookmark(@Body request: ApiUpdateScanBookmarkRequest): Response<ApiStandardResponse>
+
+    @DELETE("api/resumes/scan-history")
+    suspend fun deleteScanHistory(@Query("scanId") scanId: String): Response<ApiStandardResponse>
 
     @GET("api/tenants")
     suspend fun getTenants(): Response<ResponseBody>

@@ -40,4 +40,17 @@
     <string name="settings_environment">परिवेश</string>
     <string name="settings_language">भाषा</string>
     <string name="tenant_platform">प्लॅटफॉर्म</string>
+
+    <string name="scan_history_title">रिझ्युमे स्कॅन इतिहास</string>
+    <string name="scan_history_total">एकूण स्कॅन</string>
+    <string name="scan_history_unique">अनन्य रिझ्युमे</string>
+    <string name="scan_history_highest">सर्वोच्च स्कोअर</string>
+    <string name="scan_history_high_scoring">उच्च स्कोअर (≥80%)</string>
+    <string name="scan_history_filter_all">सर्व पहा</string>
+    <string name="scan_history_filter_highest">सर्वाधिक जुळणारे</string>
+    <string name="scan_history_filter_starred">तारांकित</string>
+    <string name="scan_history_filter_archived">संग्रहित (मॉक)</string>
+    <string name="scan_history_empty">कोणतेही स्कॅन सापडले नाहीत.</string>
+    <string name="scan_history_view_report">अहवाल पहा</string>
+    <string name="scan_history_delete">स्कॅन हटवा</string>
 </resources>

@@ -19,7 +19,10 @@ import java.net.URL
 import java.time.Instant.parse
 import java.util.UUID
 
-class JobTraqRepository(private val sessionManager: SessionManager? = null) {
+class JobTraqRepository(
+    private val sessionManager: SessionManager? = null,
+    private val resumeScanHistoryDao: ResumeScanHistoryDao? = null
+) {
 
     private val apiScope = CoroutineScope(Dispatchers.IO)
 
@@ -73,6 +76,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         fetchWalletFromApi(base)
         fetchSettingsFromApi(base)
         fetchResumesFromApi(base)
+        fetchScanHistoryFromApi(base)
         fetchDashboardDataFromApi(base)
     }
 
@@ -170,6 +174,126 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private suspend fun fetchResumesFromApi(apiService: JobTraqMobileApiService) {
+        try {
+            val res = apiService.getResumes()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val obj = org.json.JSONObject(jsonStr)
+                val jsonArray = obj.optJSONArray("resumes")
+                if (jsonArray != null && jsonArray.length() > 0) {
+                    val list = mutableListOf<ResumeEntity>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        list.add(
+                            ResumeEntity(
+                                id = item.optString("id"),
+                                title = item.optString("name"),
+                                targetRole = "Software Engineer",
+                                content = item.optString("resumeText"),
+                                matchScore = 85,
+                                feedback = "Synced from server."
+                            )
+                        )
+                    }
+                    _resumes.value = list
+                }
+            }
+        } catch (e: Exception) { /* Gracefully skip resumes fetch */ }
+    }
+
+    suspend fun fetchScanHistoryFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchScanHistoryFromApi(apiService)
+        } catch (e: Exception) { /* Gracefully skip scan history fetch */ }
+    }
+
+    private suspend fun fetchScanHistoryFromApi(apiService: JobTraqMobileApiService) {
+        try {
+            val res = apiService.getScanHistory()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val obj = org.json.JSONObject(jsonStr)
+                val jsonArray = obj.optJSONArray("scanHistory")
+                    ?: obj.optJSONArray("data")
+                if (jsonArray != null && jsonArray.length() > 0) {
+                    val list = mutableListOf<ResumeScanHistoryEntity>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        val scanDateMs = try {
+                            val iso = item.optString("scanDate")
+                            if (iso.isNotBlank()) {
+                                java.time.ZonedDateTime.parse(iso).toInstant().toEpochMilli()
+                            } else System.currentTimeMillis()
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+                        val reportDataStr = item.opt("reportData")?.let {
+                            if (it is JSONObject || it is JSONArray) it.toString() else null
+                        }
+                        list.add(
+                            ResumeScanHistoryEntity(
+                                id = item.optString("id"),
+                                tenantId = item.optString("tenantId", "platform"),
+                                userId = item.optString("userId"),
+                                resumeId = item.optString("resumeId"),
+                                resumeName = item.optString("resumeName"),
+                                jobTitle = item.optString("jobTitle"),
+                                companyName = item.optString("companyName"),
+                                scanDate = scanDateMs,
+                                matchScore = item.optInt("matchScore").takeIf { item.has("matchScore") && !item.isNull("matchScore") },
+                                resumeTextSnapshot = item.optString("resumeTextSnapshot"),
+                                jobDescriptionText = item.optString("jobDescriptionText"),
+                                reportDataJson = reportDataStr,
+                                bookmarked = item.optBoolean("bookmarked", false)
+                            )
+                        )
+                    }
+                    _resumeScanHistory.value = list.sortedByDescending { it.scanDate }
+                    resumeScanHistoryDao?.insertAllScans(list)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun toggleScanBookmark(scanId: String) {
+        val current = _resumeScanHistory.value
+        val scan = current.find { it.id == scanId } ?: return
+        val newBookmarked = !scan.bookmarked
+        val updated = scan.copy(bookmarked = newBookmarked)
+        _resumeScanHistory.value = current.map { if (it.id == scanId) updated else it }
+        apiScope.launch {
+            resumeScanHistoryDao?.updateBookmark(scanId, newBookmarked)
+            val baseUrl = _baseUrl.value
+            if (!_currentEnvironment.value.isDummyDataAllowed && baseUrl.isNotBlank()) {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.updateScanBookmark(
+                        ApiUpdateScanBookmarkRequest(scanId = scanId, bookmarked = newBookmarked)
+                    )
+                } catch (_: Exception) { /* Offline changes persisted to Room only */ }
+            }
+        }
+    }
+
+    fun deleteScanHistoryItem(scanId: String) {
+        _resumeScanHistory.value = _resumeScanHistory.value.filter { it.id != scanId }
+        apiScope.launch {
+            resumeScanHistoryDao?.deleteScanById(scanId)
+            val baseUrl = _baseUrl.value
+            if (!_currentEnvironment.value.isDummyDataAllowed && baseUrl.isNotBlank()) {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.deleteScanHistory(scanId = scanId)
+                } catch (_: Exception) { /* Offline delete persisted to Room only */ }
+            }
         }
     }
 
@@ -507,8 +631,8 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
     private val _resumes = MutableStateFlow<List<ResumeEntity>>(emptyList())
     val resumes: StateFlow<List<ResumeEntity>> = _resumes.asStateFlow()
 
-    private val _resumeScanHistory = MutableStateFlow<List<ResumeScanReportEntity>>(emptyList())
-    val resumeScanHistory: StateFlow<List<ResumeScanReportEntity>> = _resumeScanHistory.asStateFlow()
+    private val _resumeScanHistory = MutableStateFlow<List<ResumeScanHistoryEntity>>(emptyList())
+    val resumeScanHistory: StateFlow<List<ResumeScanHistoryEntity>> = _resumeScanHistory.asStateFlow()
 
     // Salary & Offer Comparisons
     private val _offers = MutableStateFlow<List<OfferComparisonEntity>>(emptyList())
@@ -943,23 +1067,56 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         val updated = resume.copy(matchScore = score, feedback = feedback, updatedAt = System.currentTimeMillis())
         _resumes.value = _resumes.value.map { if (it.id == resumeId) updated else it }
 
-        val newScanReport = ResumeScanReportEntity(
-            resumeTitle = resume.title,
-            targetRole = resume.targetRole,
-            jobTitle = if (jobDescription.length > 30) jobDescription.take(30) + "..." else jobDescription,
-            companyName = "Scanned Position",
-            scanDate = "Just now",
-            matchScore = score,
-            matchingKeywords = listOf("Kotlin", "Jetpack Compose", "Coroutines", "MVVM", "Room DB"),
-            missingKeywords = listOf("CI/CD Pipelines", "Automated Testing", "Performance Profiling"),
-            summaryFeedback = feedback,
-            actionItems = listOf(
-                "Review missing keywords and incorporate relevant project achievements",
-                "Ensure headline aligns directly with job title",
-                "Quantify impact with data metrics"
-            )
+        val matchingKw = listOf("Kotlin", "Jetpack Compose", "Coroutines", "MVVM", "Room DB")
+        val missingKw = listOf("CI/CD Pipelines", "Automated Testing", "Performance Profiling")
+        val actionItems = listOf(
+            "Review missing keywords and incorporate relevant project achievements",
+            "Ensure headline aligns directly with job title",
+            "Quantify impact with data metrics"
         )
-        _resumeScanHistory.value = listOf(newScanReport) + _resumeScanHistory.value
+        val reportJson = buildReportDataJson(matchingKw, missingKw, feedback, actionItems)
+
+        val newScanId = "scan-${UUID.randomUUID().toString().take(8)}"
+        val nowMs = System.currentTimeMillis()
+        val extractedJobTitle = if (jobDescription.length > 60) jobDescription.take(60) + "..." else jobDescription.ifBlank { "Custom ATS Analysis" }
+        val newScanHistory = ResumeScanHistoryEntity(
+            id = newScanId,
+            tenantId = _currentTenant.value,
+            userId = sessionManager?.userId?.toString() ?: "",
+            resumeId = resumeId,
+            resumeName = resume.title,
+            jobTitle = extractedJobTitle,
+            companyName = "Scanned Position",
+            scanDate = nowMs,
+            matchScore = score,
+            resumeTextSnapshot = resume.content,
+            jobDescriptionText = jobDescription,
+            reportDataJson = reportJson,
+            bookmarked = false
+        )
+        _resumeScanHistory.value = listOf(newScanHistory) + _resumeScanHistory.value
+
+        apiScope.launch {
+            resumeScanHistoryDao?.insertScan(newScanHistory)
+            val baseUrl = _baseUrl.value
+            if (!_currentEnvironment.value.isDummyDataAllowed && baseUrl.isNotBlank()) {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.createScanHistory(
+                        ApiCreateScanHistoryRequest(
+                            resumeId = resumeId,
+                            resumeName = resume.title,
+                            jobTitle = extractedJobTitle,
+                            companyName = "Scanned Position",
+                            matchScore = score,
+                            resumeTextSnapshot = resume.content,
+                            jobDescriptionText = jobDescription,
+                            reportData = reportJson
+                        )
+                    )
+                } catch (_: Exception) { /* Offline scan persisted to Room only */ }
+            }
+        }
 
         return@withContext updated
     }
@@ -1342,6 +1499,8 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
             fetchWalletFromApi(apiService)
             fetchDashboardDataFromApi(apiService)
             fetchBlogPostsFromApi(apiService)
+            fetchResumesFromApi(apiService)
+            fetchScanHistoryFromApi(apiService)
         } catch (e: Exception) {
             // Silence network connection issues for seamless UI resilience
         }

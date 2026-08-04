@@ -35,10 +35,15 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -75,14 +80,24 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.CoverLetterEntity
 import com.example.data.ResumeEntity
-import com.example.data.ResumeScanReportEntity
+import com.example.data.ResumeScanHistoryEntity
+import com.example.data.ResumeScanHistorySummaryStats
+import com.example.data.buildReportDataJson
+import com.example.data.computeSummaryStats
+import com.example.data.extractActionItems
+import com.example.data.extractMatchingKeywords
+import com.example.data.extractMissingKeywords
+import com.example.data.extractSummaryFeedback
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 @Composable
 fun Phase4AdvancedToolsScreen(
     resumes: List<ResumeEntity>,
-    scanHistory: List<ResumeScanReportEntity> = emptyList(),
+    scanHistory: List<ResumeScanHistoryEntity> = emptyList(),
     coverLetters: List<CoverLetterEntity> = emptyList(),
     activityLogs: List<String> = emptyList(),
     onAddResume: (String, String, String) -> Unit,
@@ -90,10 +105,13 @@ fun Phase4AdvancedToolsScreen(
     onGenerateCoverLetter: suspend (String, String, String, String) -> CoverLetterEntity = { _, _, _, _ ->
         CoverLetterEntity("", "", "", "")
     },
+    onToggleScanBookmark: (String) -> Unit = {},
+    onDeleteScan: (String) -> Unit = {},
+    onViewScanReport: (ResumeScanHistoryEntity) -> Unit = {},
     onShowToast: (String) -> Unit
 ) {
-    var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Resumes & AI ATS, 1: AI Cover Letters, 2: Activity Log
-    val subTabs = listOf("Resumes & AI ATS", "AI Cover Letters & DM", "Activity Log")
+    var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Resumes & AI ATS, 1: AI Cover Letters, 2: Scan History, 3: Activity Log
+    val subTabs = listOf("Resumes & AI ATS", "AI Cover Letters & DM", "Scan History", "Activity Log")
 
     Column(
         modifier = Modifier
@@ -126,8 +144,12 @@ fun Phase4AdvancedToolsScreen(
         when (selectedSubTab) {
             0 -> ResumesAndAiSection(
                 resumes = resumes,
+                scanHistory = scanHistory,
                 onAddResume = onAddResume,
                 onAnalyzeResume = onAnalyzeResume,
+                onToggleScanBookmark = onToggleScanBookmark,
+                onDeleteScan = onDeleteScan,
+                onViewScanReport = onViewScanReport,
                 onShowToast = onShowToast
             )
             1 -> AICoverLetterSection(
@@ -136,7 +158,14 @@ fun Phase4AdvancedToolsScreen(
                 onGenerateCoverLetter = onGenerateCoverLetter,
                 onShowToast = onShowToast
             )
-            2 -> ActivityLogSection(logs = activityLogs)
+            2 -> ResumeScanHistorySection(
+                scanHistory = scanHistory,
+                onToggleBookmark = onToggleScanBookmark,
+                onDelete = onDeleteScan,
+                onViewReport = onViewScanReport,
+                onShowToast = onShowToast
+            )
+            3 -> ActivityLogSection(logs = activityLogs)
         }
     }
 }
@@ -145,8 +174,12 @@ fun Phase4AdvancedToolsScreen(
 @Composable
 private fun ResumesAndAiSection(
     resumes: List<ResumeEntity>,
+    scanHistory: List<ResumeScanHistoryEntity> = emptyList(),
     onAddResume: (String, String, String) -> Unit,
     onAnalyzeResume: suspend (String, String) -> ResumeEntity,
+    onToggleScanBookmark: (String) -> Unit = {},
+    onDeleteScan: (String) -> Unit = {},
+    onViewScanReport: (ResumeScanHistoryEntity) -> Unit = {},
     onShowToast: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -360,6 +393,69 @@ private fun ResumesAndAiSection(
                 }
             }
         }
+
+        if (scanHistory.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(20.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Recent Resume Scans",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Text(
+                            text = "View All (${scanHistory.size}) →",
+                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    scanHistory.take(3).forEach { scan ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            scan.matchScore?.let { ScoreCircle(score = it, size = 40.dp, strokeWidth = 3.dp) }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (scan.jobTitle.isNotBlank()) scan.jobTitle else "(Untitled scan)",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1
+                                )
+                                if (scan.companyName.isNotBlank()) {
+                                    Text(scan.companyName, style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                                }
+                                Text(
+                                    formatRelativeDate(scan.scanDate),
+                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                            }
+                            IconButton(onClick = { onToggleScanBookmark(scan.id) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "bookmark",
+                                    tint = if (scan.bookmarked) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if (isAddModalOpen) {
@@ -436,6 +532,546 @@ private fun ActivityLogSection(logs: List<String>) {
         }
     }
 }
+
+private fun formatRelativeDate(epochMillis: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - epochMillis
+    return when {
+        diff < 60_000 -> "Just now"
+        diff < 3_600_000 -> "${diff / 60_000} min ago"
+        diff < 86_400_000 -> "${diff / 3_600_000} hr ago"
+        diff < 7 * 86_400_000 -> "${diff / 86_400_000} days ago"
+        else -> SimpleDateFormat("MMM d, yyyy", Locale.US).format(Date(epochMillis))
+    }
+}
+
+@Composable
+private fun ScoreCircle(
+    score: Int,
+    modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 52.dp,
+    strokeWidth: androidx.compose.ui.unit.Dp = 4.dp
+) {
+    val clampedScore = score.coerceIn(0, 100)
+    val progress = clampedScore / 100f
+    val progressColor = when {
+        clampedScore >= 80 -> Color(0xFF2E7D32)
+        clampedScore >= 60 -> Color(0xFFF9A825)
+        clampedScore >= 40 -> Color(0xFFEF6C00)
+        else -> Color(0xFFC62828)
+    }
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.size(size),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            strokeWidth = strokeWidth
+        )
+        Text(
+            text = "$clampedScore",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = progressColor)
+        )
+    }
+}
+
+enum class ScanHistoryFilter(val label: String) {
+    ALL("View All"),
+    HIGHEST("Highest Match"),
+    STARRED("Starred"),
+    ARCHIVED("Archived (Mock)")
+}
+
+@Composable
+private fun ResumeScanHistorySection(
+    scanHistory: List<ResumeScanHistoryEntity>,
+    onToggleBookmark: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onViewReport: (ResumeScanHistoryEntity) -> Unit,
+    onShowToast: (String) -> Unit
+) {
+    var selectedFilter by remember { mutableStateOf(ScanHistoryFilter.ALL) }
+    var reportForScan by remember { mutableStateOf<ResumeScanHistoryEntity?>(null) }
+    val stats = remember(scanHistory) { scanHistory.computeSummaryStats() }
+
+    val filteredScans = remember(scanHistory, selectedFilter) {
+        when (selectedFilter) {
+            ScanHistoryFilter.ALL -> scanHistory
+            ScanHistoryFilter.HIGHEST -> scanHistory.sortedByDescending { it.matchScore ?: 0 }
+            ScanHistoryFilter.STARRED -> scanHistory.filter { it.bookmarked }
+            ScanHistoryFilter.ARCHIVED -> emptyList()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        // Header + stats
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Analytics, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Resume Scan History",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+            Text(
+                "${filteredScans.size} results",
+                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Stats grid (2x2)
+        androidx.compose.foundation.layout.BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            val cardWidth = (maxWidth - 8.dp) / 2
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    ScanHistorySummaryStatCard(
+                        label = "Total Scans",
+                        value = stats.totalScans.toString(),
+                        icon = Icons.Default.History,
+                        modifier = Modifier.width(cardWidth)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    ScanHistorySummaryStatCard(
+                        label = "Unique Resumes",
+                        value = stats.uniqueResumes.toString(),
+                        icon = Icons.Default.Description,
+                        modifier = Modifier.width(cardWidth)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    ScanHistorySummaryStatCard(
+                        label = "Highest Score",
+                        value = "${stats.highestScore}%",
+                        icon = Icons.Default.CheckCircle,
+                        modifier = Modifier.width(cardWidth),
+                        accentColor = Color(0xFF2E7D32)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    ScanHistorySummaryStatCard(
+                        label = "High Scoring (≥80%)",
+                        value = stats.highScoringCount.toString(),
+                        icon = Icons.Default.AutoAwesome,
+                        modifier = Modifier.width(cardWidth),
+                        accentColor = Color(0xFF1565C0)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Filter chips row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScrollCompat(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ScanHistoryFilter.values().forEach { filter ->
+                val selected = selectedFilter == filter
+                AssistChip(
+                    onClick = { selectedFilter = filter },
+                    label = {
+                        Text(
+                            text = filter.label,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        )
+                    },
+                    leadingIcon = if (selected) {
+                        { Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary) }
+                    } else null,
+                    shape = RoundedCornerShape(14.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Item list
+        if (filteredScans.isEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(28.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(42.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "No scans found.",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Run an ATS Match Analysis to populate history.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(filteredScans, key = { it.id }) { scan ->
+                    key(scan.id) {
+                        var showMenu by remember { mutableStateOf(false) }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .animateItemPlacementCompat(),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (scan.bookmarked) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                else MaterialTheme.colorScheme.surface
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                scan.matchScore?.let {
+                                    ScoreCircle(score = it)
+                                } ?: run {
+                                    Box(
+                                        modifier = Modifier.size(52.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Description,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = if (scan.jobTitle.isNotBlank()) scan.jobTitle else "(Untitled job)",
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            maxLines = 1
+                                        )
+                                        if (scan.bookmarked) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.Star,
+                                                contentDescription = "bookmarked",
+                                                tint = Color(0xFFFFC107),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                    if (scan.companyName.isNotBlank()) {
+                                        Text(
+                                            scan.companyName,
+                                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = buildString {
+                                            if (scan.resumeName.isNotBlank()) append("• ${scan.resumeName}")
+                                            append("  •  ")
+                                            append(formatRelativeDate(scan.scanDate))
+                                        },
+                                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                IconButton(onClick = { onToggleBookmark(scan.id) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "toggle bookmark",
+                                        tint = if (scan.bookmarked) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Box {
+                                    IconButton(onClick = { showMenu = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "scan options")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("View Report") },
+                                            leadingIcon = { Icon(Icons.Default.OpenInNew, contentDescription = null) },
+                                            onClick = {
+                                                showMenu = false
+                                                reportForScan = scan
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "Delete Scan",
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            },
+                                            onClick = {
+                                                showMenu = false
+                                                onDelete(scan.id)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (reportForScan != null) {
+        val scan = reportForScan!!
+        ScanReportDialog(
+            scan = scan,
+            onDismiss = { reportForScan = null }
+        )
+    }
+}
+
+@Composable
+private fun ScanReportDialog(
+    scan: ResumeScanHistoryEntity,
+    onDismiss: () -> Unit
+) {
+    val matching = remember(scan) { scan.extractMatchingKeywords() }
+    val missing = remember(scan) { scan.extractMissingKeywords() }
+    val summary = remember(scan) { scan.extractSummaryFeedback() }
+    val actions = remember(scan) { scan.extractActionItems() }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Scan Report",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    scan.matchScore?.let { ScoreCircle(score = it, size = 44.dp, strokeWidth = 3.dp) }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    if (scan.jobTitle.isNotBlank()) "${scan.jobTitle}${if (scan.companyName.isNotBlank()) " @ ${scan.companyName}" else ""}"
+                    else "(Untitled)",
+                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (summary.isNotBlank()) {
+                    Text("Summary", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                if (matching.isNotEmpty()) {
+                    Text(
+                        "Matching Keywords (${matching.size})",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        matching.forEach { kw ->
+                            AssistChip(
+                                onClick = {},
+                                label = { Text(kw) },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                                    containerColor = Color(0xFFE8F5E9)
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                if (missing.isNotEmpty()) {
+                    Text(
+                        "Missing Keywords (${missing.size})",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    androidx.compose.foundation.layout.FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        missing.forEach { kw ->
+                            AssistChip(
+                                onClick = {},
+                                label = { Text(kw) },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = androidx.compose.material3.AssistChipDefaults.assistChipColors(
+                                    containerColor = Color(0xFFFFEBEE)
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+
+                if (actions.isNotEmpty()) {
+                    Text(
+                        "Action Items",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    actions.forEachIndexed { idx, action ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    (idx + 1).toString(),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(action, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                if (summary.isBlank() && matching.isEmpty() && missing.isEmpty() && actions.isEmpty()) {
+                    Text(
+                        "No structured report data stored for this scan.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ScanHistorySummaryStatCard(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    accentColor: Color = MaterialTheme.colorScheme.primary
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = accentColor)
+            )
+        }
+    }
+}
+
+@Composable
+private fun Modifier.horizontalScrollCompat(): Modifier = this.then(
+    androidx.compose.foundation.horizontalScroll(rememberScrollState())
+)
+
+@Composable
+private fun Modifier.animateItemPlacementCompat(): Modifier = this
 
 @Composable
 private fun AICoverLetterSection(

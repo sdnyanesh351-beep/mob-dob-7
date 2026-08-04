@@ -121,6 +121,94 @@ data class ResumeScanReportEntity(
     )
 )
 
+fun ResumeScanHistoryEntity.extractMatchingKeywords(): List<String> {
+    val json = reportDataJson ?: return emptyList()
+    return try {
+        val obj = org.json.JSONObject(json)
+        val arr = obj.optJSONArray("matchingKeywords")
+        if (arr != null) {
+            (0 until arr.length()).map { arr.optString(it) }
+        } else {
+            emptyList()
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun ResumeScanHistoryEntity.extractMissingKeywords(): List<String> {
+    val json = reportDataJson ?: return emptyList()
+    return try {
+        val obj = org.json.JSONObject(json)
+        val arr = obj.optJSONArray("missingKeywords")
+        if (arr != null) {
+            (0 until arr.length()).map { arr.optString(it) }
+        } else {
+            emptyList()
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+fun ResumeScanHistoryEntity.extractSummaryFeedback(): String {
+    val json = reportDataJson ?: return ""
+    return try {
+        val obj = org.json.JSONObject(json)
+        obj.optString("summaryFeedback", "")
+    } catch (_: Exception) {
+        ""
+    }
+}
+
+fun ResumeScanHistoryEntity.extractActionItems(): List<String> {
+    val json = reportDataJson ?: return emptyList()
+    return try {
+        val obj = org.json.JSONObject(json)
+        val arr = obj.optJSONArray("actionItems")
+        if (arr != null) {
+            (0 until arr.length()).map { arr.optString(it) }
+        } else {
+            emptyList()
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+data class ResumeScanHistorySummaryStats(
+    val totalScans: Int = 0,
+    val uniqueResumes: Int = 0,
+    val highestScore: Int = 0,
+    val highScoringCount: Int = 0
+)
+
+fun List<ResumeScanHistoryEntity>.computeSummaryStats(): ResumeScanHistorySummaryStats {
+    val totalScans = this.size
+    val uniqueResumes = this.map { it.resumeId }.distinct().size
+    val highestScore = this.mapNotNull { it.matchScore }.maxOrNull() ?: 0
+    val highScoringCount = this.count { (it.matchScore ?: 0) >= 80 }
+    return ResumeScanHistorySummaryStats(totalScans, uniqueResumes, highestScore, highScoringCount)
+}
+
+fun buildReportDataJson(
+    matchingKeywords: List<String>,
+    missingKeywords: List<String>,
+    summaryFeedback: String,
+    actionItems: List<String>
+): String {
+    return try {
+        val obj = org.json.JSONObject()
+        obj.put("matchingKeywords", org.json.JSONArray(matchingKeywords))
+        obj.put("missingKeywords", org.json.JSONArray(missingKeywords))
+        obj.put("summaryFeedback", summaryFeedback)
+        obj.put("actionItems", org.json.JSONArray(actionItems))
+        obj.toString()
+    } catch (_: Exception) {
+        ""
+    }
+}
+
 data class WalletTransactionEntity(
     val id: String = java.util.UUID.randomUUID().toString(),
     val type: String, // "CREDIT", "DEBIT"

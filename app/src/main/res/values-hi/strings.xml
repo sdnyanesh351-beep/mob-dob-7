@@ -40,4 +40,17 @@
     <string name="settings_environment">परिवेश</string>
     <string name="settings_language">भाषा</string>
     <string name="tenant_platform">प्लेटफ़ॉर्म</string>
+
+    <string name="scan_history_title">रिज्यूमे स्कैन इतिहास</string>
+    <string name="scan_history_total">कुल स्कैन</string>
+    <string name="scan_history_unique">अद्वितीय रिज्यूमे</string>
+    <string name="scan_history_highest">सर्वोच्च स्कोर</string>
+    <string name="scan_history_high_scoring">उच्च स्कोर (≥80%)</string>
+    <string name="scan_history_filter_all">सभी देखें</string>
+    <string name="scan_history_filter_highest">सर्वाधिक मेल</string>
+    <string name="scan_history_filter_starred">स्टार किए गए</string>
+    <string name="scan_history_filter_archived">संग्रहीत (मॉक)</string>
+    <string name="scan_history_empty">कोई स्कैन नहीं मिला।</string>
+    <string name="scan_history_view_report">रिपोर्ट देखें</string>
+    <string name="scan_history_delete">स्कैन हटाएं</string>
 </resources>

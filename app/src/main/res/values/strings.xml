@@ -41,4 +41,17 @@
     <string name="settings_environment">Environment</string>
     <string name="settings_language">Language</string>
     <string name="tenant_platform">Platform</string>
+
+    <string name="scan_history_title">Resume Scan History</string>
+    <string name="scan_history_total">Total Scans</string>
+    <string name="scan_history_unique">Unique Resumes</string>
+    <string name="scan_history_highest">Highest Score</string>
+    <string name="scan_history_high_scoring">High Scoring (≥80%)</string>
+    <string name="scan_history_filter_all">View All</string>
+    <string name="scan_history_filter_highest">Highest Match</string>
+    <string name="scan_history_filter_starred">Starred</string>
+    <string name="scan_history_filter_archived">Archived (Mock)</string>
+    <string name="scan_history_empty">No scans found.</string>
+    <string name="scan_history_view_report">View Report</string>
+    <string name="scan_history_delete">Delete Scan</string>
 </resources>
