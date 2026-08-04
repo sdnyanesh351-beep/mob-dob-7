@@ -322,6 +322,12 @@ private fun QuestionBankSection(
     var selectedType by remember { mutableStateOf("All") } // "All", "MCQ", "Q&A"
     var showOnlyBookmarked by remember { mutableStateOf(false) }
 
+    var currentPage by remember { mutableIntStateOf(1) }
+
+    LaunchedEffect(searchQuery, selectedCategory, selectedType, showOnlyBookmarked) {
+        currentPage = 1
+    }
+
     val categories = listOf("All", "Technical", "Behavioral", "System Design", "HR")
     val types = listOf("All", "MCQ", "Q&A")
 
@@ -337,6 +343,12 @@ private fun QuestionBankSection(
             }
             matchesCategory && matchesSearch && matchesBookmark && matchesType
         }
+    }
+
+    val pageSize = 15
+    val totalPages = maxOf(1, kotlin.math.ceil(filteredQuestions.size.toDouble() / pageSize).toInt())
+    val paginatedQuestions = remember(filteredQuestions, currentPage) {
+        filteredQuestions.drop((currentPage - 1) * pageSize).take(pageSize)
     }
 
     LazyColumn(
@@ -460,12 +472,62 @@ private fun QuestionBankSection(
         item { Spacer(modifier = Modifier.height(6.dp)) }
 
         // Questions List
-        items(filteredQuestions, key = { it.id }) { q ->
-            QuestionCardItem(
-                question = q,
-                onToggleBookmark = onToggleBookmark
-            )
+        if (questions.isEmpty()) {
+            items(3) {
+                com.example.ui.components.SkeletonPlaceholderCard(modifier = Modifier.padding(vertical = 4.dp))
+            }
+        } else {
+            items(paginatedQuestions, key = { it.id }) { q ->
+                QuestionCardItem(
+                    question = q,
+                    onToggleBookmark = onToggleBookmark
+                )
+            }
         }
+
+        if (totalPages > 1) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { if (currentPage > 1) currentPage-- },
+                        enabled = currentPage > 1,
+                        modifier = Modifier.testTag("prev_page_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NavigateBefore,
+                            contentDescription = "Previous Page",
+                            tint = if (currentPage > 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                    Text(
+                        text = "Page $currentPage of $totalPages",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    IconButton(
+                        onClick = { if (currentPage < totalPages) currentPage++ },
+                        enabled = currentPage < totalPages,
+                        modifier = Modifier.testTag("next_page_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NavigateNext,
+                            contentDescription = "Next Page",
+                            tint = if (currentPage < totalPages) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                }
+            }
+        }
+
         item {
             BookMockInterviewSection(
                 onSchedulePracticeInterview = onSchedulePracticeInterview,

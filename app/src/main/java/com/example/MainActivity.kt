@@ -114,6 +114,14 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                     label = "AuthScreenTransitions"
                 ) { mode ->
                     when (mode) {
+                        AuthScreenMode.SPLASH -> {
+                            SplashScreen(
+                                onSplashFinished = {
+                                    viewModel.navigateTo(AuthScreenMode.ONBOARDING)
+                                }
+                            )
+                        }
+
                         AuthScreenMode.ONBOARDING -> {
                             OnboardingScreen(
                                 onFinishOnboarding = { viewModel.navigateTo(AuthScreenMode.WELCOME) },

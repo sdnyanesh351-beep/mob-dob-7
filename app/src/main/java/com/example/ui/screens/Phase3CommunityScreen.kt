@@ -244,7 +244,12 @@ private fun FeedSection(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            items(tenantPosts, key = { it.id }) { post ->
+            if (tenantPosts.isEmpty()) {
+                items(3) {
+                    com.example.ui.components.SkeletonPlaceholderCard(modifier = Modifier.padding(vertical = 4.dp))
+                }
+            } else {
+                items(tenantPosts, key = { it.id }) { post ->
                 var isCommentsExpanded by remember(post.id) { mutableStateOf(false) }
 
                 Card(
@@ -534,6 +539,7 @@ private fun FeedSection(
                         }
                     }
                 }
+            }
             }
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }

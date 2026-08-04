@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import retrofit2.HttpException
 
 enum class AuthScreenMode {
+    SPLASH,
     ONBOARDING,
     WELCOME,
     LOGIN,
@@ -65,7 +66,7 @@ data class PasswordStrength(
 }
 
 data class AuthUiState(
-    val currentMode: AuthScreenMode = AuthScreenMode.ONBOARDING,
+    val currentMode: AuthScreenMode = AuthScreenMode.SPLASH,
     val isLoading: Boolean = false,
     val isAuthRedirecting: Boolean = false,
     val authRedirectMessage: String = "",
