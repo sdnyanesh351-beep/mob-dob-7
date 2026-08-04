@@ -1250,6 +1250,29 @@ fun CreatePostDialog(
                     }
                 }
 
+                val validationError = remember(selectedType, title, content, pollOptions, eventTitle, eventDate, eventLocation, capacity) {
+                    when {
+                        selectedType != "text" && title.isBlank() -> "Title cannot be empty."
+                        content.isBlank() -> "Content cannot be empty."
+                        content.length < 5 -> "Content must be at least 5 characters."
+                        selectedType == "poll" && pollOptions.count { it.isNotBlank() } < 2 -> "Please provide at least 2 poll options."
+                        selectedType == "event" && eventTitle.isBlank() -> "Event title cannot be empty."
+                        selectedType == "event" && eventDate.isBlank() -> "Event date/time is required."
+                        selectedType == "event" && eventLocation.isBlank() -> "Event location is required."
+                        selectedType == "event" && (capacity.toIntOrNull() ?: 0) <= 0 -> "Event capacity must be a positive number."
+                        else -> null
+                    }
+                }
+
+                validationError?.let {
+                    Text(
+                        text = it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -1264,7 +1287,7 @@ fun CreatePostDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
-                            if (content.isNotBlank()) {
+                            if (validationError == null) {
                                 val resolvedPollOpts = if (selectedType == "poll") pollOptions.filter { it.isNotBlank() } else null
                                 val resolvedCapacity = capacity.toIntOrNull()
                                 onSubmit(
@@ -1279,7 +1302,7 @@ fun CreatePostDialog(
                                 )
                             }
                         },
-                        enabled = content.isNotBlank() && (selectedType != "poll" || pollOptions.count { it.isNotBlank() } >= 2),
+                        enabled = validationError == null,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.testTag("submit_post_button")
                     ) {

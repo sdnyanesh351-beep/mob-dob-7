@@ -335,6 +335,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(loginError = "Please enter both email and password.") }
             return
         }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            _uiState.update { it.copy(loginError = "Please enter a valid email address.") }
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update {
@@ -672,8 +676,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(signupError = "Please enter a valid email address.") }
             return
         }
-        if (state.signupPassword.length < 6) {
-            _uiState.update { it.copy(signupError = "Password must be at least 6 characters.") }
+        val password = state.signupPassword
+        val hasUppercase = password.any { it.isUpperCase() }
+        val hasDigit = password.any { it.isDigit() }
+        val hasSpecial = password.any { !it.isLetterOrDigit() }
+        if (password.length < 8 || !hasUppercase || !hasDigit || !hasSpecial) {
+            _uiState.update { it.copy(signupError = "Password must be at least 8 characters and contain at least 1 uppercase letter, 1 digit, and 1 special character.") }
             return
         }
         if (state.signupPassword != state.signupConfirmPassword) {
