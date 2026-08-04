@@ -89,7 +89,8 @@ fun SignupScreen(
     onNavigateToLogin: () -> Unit,
     onNavigateBack: () -> Unit,
     onSelectTenant: (String) -> Unit = {},
-    onTenantSearchQueryChanged: (String) -> Unit = {}
+    onTenantSearchQueryChanged: (String) -> Unit = {},
+    onSocialLogin: (String) -> Unit = {}
 ) {
     var isTenantSearchModalOpen by remember { mutableStateOf(false) }
 
@@ -589,6 +590,32 @@ fun SignupScreen(
                         text = "Create Account",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Continue with Google Button
+            OutlinedButton(
+                onClick = { onSocialLogin("Google") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("google_signup_button"),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "G  Sign up with Google",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

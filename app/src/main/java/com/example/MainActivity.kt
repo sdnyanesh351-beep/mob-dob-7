@@ -145,7 +145,8 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                                 onNavigateBack = { viewModel.navigateTo(AuthScreenMode.WELCOME) },
                                 onSelectTenant = viewModel::onSelectTenant,
                                 onTenantSearchQueryChanged = viewModel::onTenantSearchQueryChanged,
-                                onNavigateToBaseUrlConfig = { viewModel.navigateTo(AuthScreenMode.BASE_URL_CONFIG) }
+                                onNavigateToBaseUrlConfig = { viewModel.navigateTo(AuthScreenMode.BASE_URL_CONFIG) },
+                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider) }
                             )
                         }
 
@@ -167,7 +168,8 @@ fun AuthApp(viewModel: AuthViewModel = viewModel()) {
                                 onNavigateToLogin = { viewModel.navigateTo(AuthScreenMode.LOGIN) },
                                 onNavigateBack = { viewModel.navigateTo(AuthScreenMode.WELCOME) },
                                 onSelectTenant = viewModel::onSelectTenant,
-                                onTenantSearchQueryChanged = viewModel::onTenantSearchQueryChanged
+                                onTenantSearchQueryChanged = viewModel::onTenantSearchQueryChanged,
+                                onSocialLogin = { provider -> viewModel.triggerSocialAuth(provider) }
                             )
                         }
 

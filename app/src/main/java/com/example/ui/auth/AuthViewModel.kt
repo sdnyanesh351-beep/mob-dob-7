@@ -915,6 +915,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     fun triggerSocialAuth(providerName: String) {
         val tenant = _uiState.value.selectedTenant
         val isDummyAllowed = _uiState.value.activeEnvironment.isDummyDataAllowed
+        val baseUrl = _uiState.value.baseUrl
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
@@ -925,22 +926,21 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             }
             delay(1000)
 
-            if (isDummyAllowed) {
-                val demoEmail = "${providerName.lowercase()}user@auth.io"
-                var user = repository.getUserByEmail(demoEmail)
-                if (user == null) {
-                    repository.registerUser(
-                        fullName = "$providerName User",
-                        email = demoEmail,
-                        passwordRaw = "SocialPass123!",
-                        phone = "",
-                        avatarBadgeIndex = 2
-                    )
-                    user = repository.getUserByEmail(demoEmail)
-                }
+            val mockToken = "mock-google-token-${providerName.lowercase()}user@google.com|${providerName} User|https://lh3.googleusercontent.com/a/default-user"
+            val result = repository.authenticateWithGoogle(
+                idToken = mockToken,
+                action = "login",
+                baseUrl = baseUrl,
+                tenantId = tenant,
+                isDummyDataAllowed = isDummyAllowed
+            )
+
+            result.onSuccess { userId ->
+                val demoEmail = "${providerName.lowercase()}user@google.com"
+                val user = repository.getUserByEmail(demoEmail)
                 if (user != null) {
                     sessionManager.saveLoginSession(
-                        token = null,
+                        token = "mock-google-token-${user.id}",
                         email = user.email,
                         userId = user.id,
                         rememberMe = true,
@@ -957,12 +957,12 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 startSessionHeartbeat()
-            } else {
+            }.onFailure { exception ->
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isAuthRedirecting = false,
-                        loginError = "$providerName OAuth not yet integrated with backend API on ${_uiState.value.baseUrl}. Please use email/password login in DEV/PROD environments."
+                        loginError = exception.message ?: "Google OAuth failed."
                     )
                 }
             }

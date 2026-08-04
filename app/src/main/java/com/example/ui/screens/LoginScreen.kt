@@ -84,7 +84,8 @@ fun LoginScreen(
     onNavigateBack: () -> Unit,
     onSelectTenant: (String) -> Unit = {},
     onTenantSearchQueryChanged: (String) -> Unit = {},
-    onNavigateToBaseUrlConfig: (() -> Unit)? = null
+    onNavigateToBaseUrlConfig: (() -> Unit)? = null,
+    onSocialLogin: (String) -> Unit = {}
 ) {
     var isTenantSearchModalOpen by remember { mutableStateOf(false) }
 
@@ -448,6 +449,32 @@ fun LoginScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Biometric Quick Unlock",
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Continue with Google Button
+            OutlinedButton(
+                onClick = { onSocialLogin("Google") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("google_login_button"),
+                shape = RoundedCornerShape(28.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "G  Continue with Google",
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface
                     )

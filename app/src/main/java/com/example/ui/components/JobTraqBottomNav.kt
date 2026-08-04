@@ -49,7 +49,7 @@ fun JobTraqBottomNav(
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 6.dp
     ) {
-        JobTraqTab.entries.filter { it != JobTraqTab.REFERRALS }.forEach { tab ->
+        JobTraqTab.entries.filter { it != JobTraqTab.REFERRALS && it != JobTraqTab.BLOG }.forEach { tab ->
             val label = I18nHelper.getString(tab.i18nKey, currentLanguage)
             NavigationBarItem(
                 selected = selectedTab == tab,

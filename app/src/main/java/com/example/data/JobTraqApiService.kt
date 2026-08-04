@@ -26,6 +26,14 @@ data class ApiLoginRequest(
     val tenantId: String = "platform"
 )
 
+data class ApiGoogleAuthRequest(
+    val idToken: String,
+    val action: String,
+    val tenantId: String? = null,
+    val referralCode: String? = null,
+    val partnerCode: String? = null
+)
+
 data class ApiUserDto(
     val id: String,
     val name: String,
@@ -237,6 +245,9 @@ interface JobTraqMobileApiService {
 
     @POST("api/auth/login")
     suspend fun login(@Body request: ApiLoginRequest): Response<ApiAuthResponse>
+
+    @POST("api/auth/google")
+    suspend fun googleAuth(@Body request: ApiGoogleAuthRequest): Response<ApiAuthResponse>
 
     @GET("api/auth/verify")
     suspend fun verifyAccount(@Query("token") token: String): Response<ApiStandardResponse>
