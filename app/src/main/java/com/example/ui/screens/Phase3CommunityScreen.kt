@@ -1144,15 +1144,17 @@ fun CreatePostDialog(
                     }
                 }
 
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    placeholder = { Text("Give your post a title...") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("post_title_input"),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                if (selectedType != "text") {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Title") },
+                        placeholder = { Text("Give your post a title...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("post_title_input"),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
 
                 OutlinedTextField(
                     value = content,
@@ -1266,7 +1268,7 @@ fun CreatePostDialog(
                                 val resolvedPollOpts = if (selectedType == "poll") pollOptions.filter { it.isNotBlank() } else null
                                 val resolvedCapacity = capacity.toIntOrNull()
                                 onSubmit(
-                                    title,
+                                    if (selectedType == "text") "Discussion" else title.ifBlank { "Discussion" },
                                     content,
                                     selectedType,
                                     resolvedPollOpts,
