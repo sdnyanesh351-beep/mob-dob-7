@@ -362,6 +362,9 @@ interface JobTraqMobileApiService {
     @POST("api/resumes")
     suspend fun createResume(@Body request: ApiCreateResumeRequest): Response<ApiStandardResponse>
 
+    @GET("api/tenants")
+    suspend fun getTenants(): Response<ResponseBody>
+
     // 8. Job Applications Tracker
     @GET("api/jobs/applications")
     suspend fun getJobApplications(

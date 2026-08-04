@@ -94,15 +94,10 @@ fun SignupScreen(
 ) {
     var isTenantSearchModalOpen by remember { mutableStateOf(false) }
 
-    val tenantList = remember {
-        listOf(
-            Triple("platform", "Platform Workspace (Default)", "Global Enterprise Platform"),
-            Triple("acme", "Acme Global Tech", "Enterprise Multi-Tenant"),
-            Triple("apex", "Apex Health Systems", "Healthcare & Biotech"),
-            Triple("nexus", "Nexus FinTech Labs", "Financial Services"),
-            Triple("edupulse", "EduPulse Academy", "Education & Research"),
-            Triple("omni", "Omni Retail Group", "E-Commerce & Retail")
-        )
+    val tenantList = remember(state.tenantsList) {
+        state.tenantsList.map { (id, name) ->
+            Triple(id, name, "Workspace Tenant")
+        }
     }
 
     Box(

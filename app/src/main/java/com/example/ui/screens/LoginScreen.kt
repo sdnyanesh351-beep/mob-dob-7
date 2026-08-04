@@ -89,14 +89,7 @@ fun LoginScreen(
 ) {
     var isTenantSearchModalOpen by remember { mutableStateOf(false) }
 
-    val tenantList = listOf(
-        "platform" to "Platform Default Workspace",
-        "acme" to "Acme Innovations Inc.",
-        "global" to "Global Systems Corp.",
-        "techcorp" to "TechCorp Solutions",
-        "nextgen" to "NextGen Systems",
-        "starlight" to "Starlight AI Labs"
-    )
+    val tenantList = state.tenantsList
 
     Box(
         modifier = Modifier

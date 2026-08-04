@@ -122,7 +122,15 @@ data class AuthUiState(
         "hi" to "हिन्दी (Hindi)",
         "mr" to "मराठी (Marathi)"
     ),
-    val streakData: StreakData = StreakData()
+    val streakData: StreakData = StreakData(),
+    val tenantsList: List<Pair<String, String>> = listOf(
+        "platform" to "Platform Default Workspace",
+        "acme" to "Acme Innovations Inc.",
+        "global" to "Global Systems Corp.",
+        "techcorp" to "TechCorp Solutions",
+        "nextgen" to "NextGen Systems",
+        "starlight" to "Starlight AI Labs"
+    )
 )
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
@@ -195,6 +203,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         startSessionChangeListener()
+        fetchTenantsList()
     }
 
     private fun startSessionChangeListener() {
@@ -205,6 +214,39 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             .launchIn(viewModelScope)
+    }
+
+    fun fetchTenantsList() {
+        viewModelScope.launch {
+            try {
+                val cleanUrl = _uiState.value.baseUrl
+                if (cleanUrl.isNotBlank()) {
+                    val api = RetrofitClient.createApiService(cleanUrl, sessionManager)
+                    val response = api.getTenants()
+                    if (response.isSuccessful && response.body() != null) {
+                        val jsonStr = response.body()!!.string()
+                        val obj = org.json.JSONObject(jsonStr)
+                        val tenantsArr = obj.optJSONArray("tenants")
+                        if (tenantsArr != null) {
+                            val list = mutableListOf<Pair<String, String>>()
+                            for (i in 0 until tenantsArr.length()) {
+                                val t = tenantsArr.getJSONObject(i)
+                                val id = t.optString("id")
+                                val name = t.optString("name")
+                                if (id.isNotBlank() && name.isNotBlank()) {
+                                    list.add(id to name)
+                                }
+                            }
+                            if (list.isNotEmpty()) {
+                                _uiState.update { it.copy(tenantsList = list) }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Fallback to defaults on connection error
+            }
+        }
     }
 
     private fun startSessionHeartbeat() {

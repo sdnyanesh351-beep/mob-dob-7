@@ -3,6 +3,8 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +78,7 @@ fun WalletScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
+            .verticalScroll(rememberScrollState())
             .testTag("wallet_screen_root")
     ) {
         // Top Toolbar Row
@@ -340,7 +343,7 @@ fun WalletScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .padding(vertical = 32.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -349,14 +352,13 @@ fun WalletScreen(
                 )
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
                     .testTag("wallet_transactions_list"),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(walletState.transactions) { tx ->
+                walletState.transactions.forEach { tx ->
                     TransactionItem(tx = tx)
                 }
             }

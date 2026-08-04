@@ -73,6 +73,7 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         fetchWalletFromApi(base)
         fetchSettingsFromApi(base)
         fetchResumesFromApi(base)
+        fetchDashboardDataFromApi(base)
     }
 
     suspend fun fetchJobsFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
@@ -170,6 +171,14 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    suspend fun fetchDashboardDataFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchDashboardDataFromApi(apiService)
+        } catch (e: Exception) {}
     }
 
     fun loadTestDummyData() {
@@ -1752,6 +1761,9 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
                     _walletState.value = _walletState.value.copy(
                         level = progress.level,
                         xp = totalXp,
+                        streakDays = progress.dayStreak
+                    )
+                    _dailyStreakState.value = _dailyStreakState.value.copy(
                         streakDays = progress.dayStreak
                     )
                 }
