@@ -551,6 +551,47 @@ class JobTraqRepository(private val sessionManager: SessionManager? = null) {
     fun saveQuizResult(result: QuizResult) {
         _recentQuizResults.value = (listOf(result) + _recentQuizResults.value).take(10)
         completeDailyChallenge(xpEarned = 50)
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        val quiz = result.quiz
+        val sessionId = quiz?.id
+
+        if (!isDummyAllowed && baseUrl.isNotBlank() && sessionId != null && !sessionId.startsWith("quiz-")) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    
+                    val categoryStats = mutableMapOf<String, Map<String, Int>>()
+                    val tagStats = mutableMapOf<String, Int>()
+                    
+                    quiz.questions.forEach { q ->
+                        val isCorrect = result.userAnswers[q.id] == q.correctOptionIndex
+                        val increment = if (isCorrect) 1 else 0
+                        
+                        val currentCatMap = categoryStats[q.category] ?: mapOf("total" to 0, "correct" to 0)
+                        val total = (currentCatMap["total"] ?: 0) + 1
+                        val correct = (currentCatMap["correct"] ?: 0) + increment
+                        categoryStats[q.category] = mapOf("total" to total, "correct" to correct)
+                        
+                        val currentTagCount = tagStats[q.category] ?: 0
+                        tagStats[q.category] = currentTagCount + increment
+                    }
+
+                    val request = ApiCompleteQuizRequest(
+                        sessionId = sessionId,
+                        score = result.correctAnswers,
+                        percentage = result.scorePercentage.toDouble(),
+                        timeTaken = result.durationSeconds,
+                        categoryStats = categoryStats,
+                        tagStats = tagStats
+                    )
+                    apiService.completeQuiz(request)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     fun createQuiz(title: String, description: String, selectedQuestions: List<QuestionEntity>) {
