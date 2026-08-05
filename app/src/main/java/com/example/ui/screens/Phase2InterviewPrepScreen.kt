@@ -320,19 +320,22 @@ private fun QuestionBankSection(
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedType by remember { mutableStateOf("All") } // "All", "MCQ", "Q&A"
+    var selectedSort by remember { mutableStateOf("Newest") }
     var showOnlyBookmarked by remember { mutableStateOf(false) }
 
     var currentPage by remember { mutableIntStateOf(1) }
 
-    LaunchedEffect(searchQuery, selectedCategory, selectedType, showOnlyBookmarked) {
+    LaunchedEffect(searchQuery, selectedCategory, selectedType, selectedSort, showOnlyBookmarked) {
         currentPage = 1
     }
 
     val categories = listOf("All", "Technical", "Behavioral", "System Design", "HR")
     val types = listOf("All", "MCQ", "Q&A")
+    val sortOptions = listOf("Newest", "Highest Rated", "Most Reviewed", "Easy First", "Hard First")
+    val difficultyOrder = mapOf("Easy" to 0, "Medium" to 1, "Hard" to 2)
 
-    val filteredQuestions = remember(questions, searchQuery, selectedCategory, showOnlyBookmarked, selectedType) {
-        questions.filter { q ->
+    val filteredQuestions = remember(questions, searchQuery, selectedCategory, showOnlyBookmarked, selectedType, selectedSort) {
+        val filtered = questions.filter { q ->
             val matchesCategory = selectedCategory == "All" || q.category.equals(selectedCategory, ignoreCase = true)
             val matchesSearch = q.questionText.contains(searchQuery, ignoreCase = true) || q.category.contains(searchQuery, ignoreCase = true)
             val matchesBookmark = !showOnlyBookmarked || q.isBookmarked
@@ -342,6 +345,13 @@ private fun QuestionBankSection(
                 else -> true
             }
             matchesCategory && matchesSearch && matchesBookmark && matchesType
+        }
+        when (selectedSort) {
+            "Highest Rated" -> filtered.sortedByDescending { it.avgRating }
+            "Most Reviewed" -> filtered.sortedByDescending { it.ratingCount }
+            "Easy First" -> filtered.sortedBy { difficultyOrder[it.difficulty] ?: 1 }
+            "Hard First" -> filtered.sortedByDescending { difficultyOrder[it.difficulty] ?: 1 }
+            else -> filtered
         }
     }
 
@@ -464,6 +474,49 @@ private fun QuestionBankSection(
                             ),
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                         )
+                    }
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(4.dp)) }
+
+        // Sort Options Chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp)
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(sortOptions) { sort ->
+                        val isSelected = selectedSort == sort
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { selectedSort = sort }
+                                .testTag("sort_${sort.replace(" ", "_").lowercase()}"),
+                            color = if (isSelected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Text(
+                                text = sort,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }

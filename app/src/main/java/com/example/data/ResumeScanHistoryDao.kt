@@ -55,4 +55,16 @@ interface ResumeScanHistoryDao {
 
     @Query("SELECT COUNT(*) FROM resume_scan_history WHERE matchScore >= 80")
     suspend fun getHighScoringCount(): Int
+
+    @Query("SELECT * FROM resume_scan_history ORDER BY scanDate DESC LIMIT :limit OFFSET :offset")
+    suspend fun getScanPage(limit: Int, offset: Int): List<ResumeScanHistoryEntity>
+
+    @Query("SELECT * FROM resume_scan_history WHERE bookmarked = 1 ORDER BY scanDate DESC LIMIT :limit OFFSET :offset")
+    suspend fun getStarredScanPage(limit: Int, offset: Int): List<ResumeScanHistoryEntity>
+
+    @Query("SELECT * FROM resume_scan_history ORDER BY matchScore DESC LIMIT :limit OFFSET :offset")
+    suspend fun getScanPageByScore(limit: Int, offset: Int): List<ResumeScanHistoryEntity>
+
+    @Query("SELECT COUNT(*) FROM resume_scan_history")
+    suspend fun getScanCount(): Int
 }

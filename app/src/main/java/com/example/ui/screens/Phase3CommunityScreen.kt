@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.AlumniMentorEntity
 import com.example.data.FeedPostEntity
+import com.example.data.ReferralLeaderboardUser
 import com.example.data.WalletState
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -84,10 +85,15 @@ fun Phase3CommunityScreen(
     walletState: WalletState,
     alumniMentors: List<AlumniMentorEntity> = emptyList(),
     currentTenant: String,
+    leaderboard: List<ReferralLeaderboardUser> = emptyList(),
+    profileCompletionPercent: Int = 0,
+    leaderboardSource: String = "sample",
+    streakSource: String = "local",
     onRefresh: (() -> Unit)? = null,
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
+    onVotePoll: (String, String, Int) -> Unit = { _, _, _ -> },
     onShowToast: (String) -> Unit,
     onRedeemCode: suspend (String) -> Pair<Boolean, String> = { Pair(false, "") },
     onPurchaseStreakFreeze: suspend () -> Pair<Boolean, String> = { Pair(false, "") }
@@ -131,13 +137,21 @@ fun Phase3CommunityScreen(
                 onRefresh = if (selectedSubTab == 0) onRefresh else null,
                 onAddPost = onAddPost,
                 onToggleLike = onToggleLike,
-                onAddComment = onAddComment
+                onAddComment = onAddComment,
+                onVotePoll = onVotePoll
             )
             1 -> AlumniMentorsSection(
                 mentors = alumniMentors,
                 onShowToast = onShowToast
             )
-            2 -> GamificationSection(walletState = walletState, onShowToast = onShowToast)
+            2 -> GamificationSection(
+                    walletState = walletState,
+                    leaderboard = leaderboard,
+                    profileCompletionPercent = profileCompletionPercent,
+                    leaderboardSource = leaderboardSource,
+                    streakSource = streakSource,
+                    onShowToast = onShowToast
+                )
             3 -> WalletScreen(
                 walletState = walletState,
                 onRedeemCode = onRedeemCode,
@@ -159,7 +173,8 @@ private fun FeedSection(
     onRefresh: (() -> Unit)? = null,
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
-    onAddComment: (String, String) -> Unit
+    onAddComment: (String, String) -> Unit,
+    onVotePoll: (String, String, Int) -> Unit = { _, _, _ -> }
 ) {
     var showCreatePostDialog by remember { mutableStateOf(false) }
     var activeCommentPostId by remember { mutableStateOf<String?>(null) }
@@ -347,6 +362,7 @@ private fun FeedSection(
                         // Poll Options Display
                         if (post.type == "poll" && post.pollOptions.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
+                            val totalVotes = post.pollOptions.sumOf { it.votes }.coerceAtLeast(1)
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -354,21 +370,42 @@ private fun FeedSection(
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                val totalVotes = post.pollOptions.sumOf { it.votes }.coerceAtLeast(1)
-                                post.pollOptions.forEach { opt ->
+                                post.pollOptions.forEachIndexed { idx, opt ->
+                                    val isMyVote = post.userPollVote != null && opt.option.equals(post.userPollVote, ignoreCase = true)
                                     val percent = (opt.votes * 100) / totalVotes
-                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                    val optionBg = if (isMyVote) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                                    val borderColor = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(optionBg)
+                                            .clickable(enabled = true) {
+                                                onVotePoll(post.id, opt.option, idx)
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Row(
                                             horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(text = opt.option, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                            Text(text = "${opt.votes} votes ($percent%)", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                text = if (isMyVote) "✓ ${opt.option}" else opt.option,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "${opt.votes} votes ($percent%)",
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
                                         }
-                                        Spacer(modifier = Modifier.height(4.dp))
                                         LinearProgressIndicator(
                                             progress = { opt.votes.toFloat() / totalVotes.toFloat() },
-                                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                                            color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                                         )
                                     }
                                 }
@@ -605,6 +642,10 @@ private fun FeedSection(
 @Composable
 private fun GamificationSection(
     walletState: WalletState,
+    leaderboard: List<ReferralLeaderboardUser> = emptyList(),
+    profileCompletionPercent: Int = 0,
+    leaderboardSource: String = "sample",
+    streakSource: String = "local",
     onShowToast: (String) -> Unit
 ) {
     Column(
@@ -718,20 +759,78 @@ private fun GamificationSection(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                listOf(
-                    Triple("1. Alex Rivera (You)", "1,250 XP", "🔥 7 Days"),
-                    Triple("2. Priya Sharma", "1,120 XP", "🔥 5 Days"),
-                    Triple("3. Rohan Verma", "980 XP", "🔥 4 Days")
-                ).forEach { item ->
+                val displayList = if (leaderboard.isNotEmpty()) {
+                    leaderboard.take(5)
+                } else {
+                    listOf(
+                        ReferralLeaderboardUser("u-1", 1, "Alex Rivera (You)", 1250, 7, 500, true, 0),
+                        ReferralLeaderboardUser("u-2", 2, "Priya Sharma", 1120, 5, 400, false, 1),
+                        ReferralLeaderboardUser("u-3", 3, "Rohan Verma", 980, 4, 350, false, 2)
+                    )
+                }
+                displayList.forEach { user ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(item.first, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                        Text("${item.second} • ${item.third}", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val badgeColors = listOf(
+                                Color(0xFF4F46E5), Color(0xFF7C3AED), Color(0xFF06B6D4),
+                                Color(0xFF10B981), Color(0xFFF59E0B)
+                            )
+                            val badgeColor = badgeColors.getOrElse(user.avatarBadgeIndex) { MaterialTheme.colorScheme.primary }
+                            Surface(
+                                shape = CircleShape,
+                                color = badgeColor,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = user.name.take(1).uppercase(),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "${user.rank}. ${user.name}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "%,d XP".format(user.points),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            if (user.referrals > 0) {
+                                Text(
+                                    text = "🔥 ${user.referrals} Days • %d Coins".format(user.coins),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
                     }
+                }
+                if (leaderboard.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Source: ${leaderboardSource.uppercase()}",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.align(Alignment.End)
+                    )
                 }
             }
         }

@@ -24,7 +24,10 @@ data class QuestionEntity(
     val sampleAnswer: String,
     val options: List<String> = emptyList(),
     val correctOptionIndex: Int = 0,
-    val isBookmarked: Boolean = false
+    val isBookmarked: Boolean = false,
+    val avgRating: Double = 0.0,
+    val ratingCount: Int = 0,
+    val userRating: Int = 0
 )
 
 data class QuizEntity(
@@ -88,6 +91,7 @@ data class FeedPostEntity(
     val comments: List<CommentEntity> = emptyList(),
     val type: String = "Discussion",
     val pollOptions: List<PollOptionEntity> = emptyList(),
+    val userPollVote: String? = null,
     val eventTitle: String? = null,
     val eventDate: String? = null,
     val eventLocation: String? = null
@@ -230,12 +234,17 @@ data class ReferralHistoryEntity(
 )
 
 data class ReferralLeaderboardUser(
+    val id: String,
     val rank: Int,
-    val userId: String,
     val name: String,
-    val successfulReferrals: Int,
-    val totalEarnedCoins: Int,
-    val avatarBadgeIndex: Int = 0
+    val points: Int,
+    val referrals: Int,
+    val coins: Int,
+    val isYou: Boolean = false,
+    val avatarBadgeIndex: Int = 0,
+    val userId: String = id,
+    val successfulReferrals: Int = referrals,
+    val totalEarnedCoins: Int = coins
 )
 
 data class ReferralActivityLog(

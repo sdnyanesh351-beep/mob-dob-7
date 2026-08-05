@@ -182,6 +182,12 @@ data class ApiToggleLikeRequest(
     val postId: String
 )
 
+data class ApiPollVoteRequest(
+    val postId: String,
+    val option: String,
+    val optionIndex: Int = -1
+)
+
 data class ApiCreateResumeRequest(
     val title: String,
     val content: String
@@ -294,6 +300,95 @@ data class ApiUpdateSettingsRequest(
     val userApiKey: String? = null
 )
 
+// --- User Profile DTOs (Phase 1.2) ---
+data class ApiUserProfileDto(
+    val id: String? = null,
+    val name: String? = null,
+    val fullName: String? = null,
+    val email: String? = null,
+    val phone: String? = null,
+    val headline: String? = null,
+    val location: String? = null,
+    val skills: List<String>? = emptyList(),
+    val education: List<Any?>? = emptyList(),
+    val experience: List<Any?>? = emptyList(),
+    val resumeUrl: String? = null,
+    val preferredRole: String? = null,
+    val expectedSalary: String? = null,
+    val language: String? = "en",
+    val avatarBadgeIndex: Int? = 0,
+    val createdAt: String? = null,
+    val tenantId: String? = null,
+    val role: String? = null
+)
+
+data class ApiUpdateProfileRequest(
+    val name: String? = null,
+    val fullName: String? = null,
+    val phone: String? = null,
+    val headline: String? = null,
+    val location: String? = null,
+    val skills: List<String>? = null,
+    val education: List<Any?>? = null,
+    val experience: List<Any?>? = null,
+    val resumeUrl: String? = null,
+    val preferredRole: String? = null,
+    val expectedSalary: String? = null,
+    val avatarBadgeIndex: Int? = null
+)
+
+data class ApiProfileCompletionCheckItem(
+    val field: String,
+    val label: String,
+    val completed: Boolean
+)
+
+data class ApiProfileCompletionResponse(
+    val success: Boolean = true,
+    val percent: Int = 0,
+    val total: Int = 0,
+    val completed: Int = 0,
+    val checklist: List<ApiProfileCompletionCheckItem> = emptyList()
+)
+
+data class ApiLeaderboardEntryDto(
+    val rank: Int,
+    val userId: String,
+    val name: String,
+    val xp: Int? = 0,
+    val successfulReferrals: Int? = 0,
+    val totalEarnedCoins: Int? = 0,
+    val streakDays: Int? = 0,
+    val avatarBadgeIndex: Int? = 0
+)
+
+data class ApiLeaderboardResponse(
+    val success: Boolean = true,
+    val data: List<ApiLeaderboardEntryDto>? = emptyList(),
+    val leaderboard: List<ApiLeaderboardEntryDto>? = emptyList(),
+    val userRank: Int? = null
+)
+
+// --- Daily Streak DTOs (Phase 1.2) ---
+data class ApiStreakResponse(
+    val success: Boolean = true,
+    val currentStreak: Int = 0,
+    val longestStreak: Int = 0,
+    val lastActiveDate: String? = null,
+    val streakFrozen: Boolean = false,
+    val streakFreezesAvailable: Int = 0,
+    val isActiveToday: Boolean = false,
+    val weeklyPattern: List<Boolean> = listOf(false, false, false, false, false, false, false),
+    val totalActiveDays: Int = 0
+)
+
+data class ApiQuestionRatingDto(
+    val questionId: String,
+    val avgRating: Double = 0.0,
+    val ratingCount: Int = 0,
+    val userRating: Int = 0
+)
+
 // --- Standard Generic Response ---
 data class ApiStandardResponse(
     val success: Boolean = true,
@@ -314,11 +409,31 @@ interface JobTraqMobileApiService {
     suspend fun googleAuth(@Body request: ApiGoogleAuthRequest): Response<ApiAuthResponse>
 
     @GET("api/auth/verify")
-    suspend fun verifyAccount(@Query("token") token: String): Response<ApiStandardResponse>
+    suspend fun verifyAccount(
+        @Query("token") token: String,
+        @Query("lang") lang: String? = null
+    ): Response<ApiStandardResponse>
+
+    // 1b. User Profile Endpoints
+    @GET("api/users/me")
+    suspend fun getUserMe(@Query("lang") lang: String? = null): Response<ResponseBody>
+
+    @PUT("api/users/me")
+    suspend fun updateUserMe(@Body request: ApiUpdateProfileRequest): Response<ApiStandardResponse>
+
+    @GET("api/users/me/completion")
+    suspend fun getUserProfileCompletion(@Query("lang") lang: String? = null): Response<ResponseBody>
+
+    // 1c. Daily Streak Endpoints
+    @GET("api/streak")
+    suspend fun getStreak(@Query("lang") lang: String? = null): Response<ResponseBody>
+
+    @POST("api/streak/record")
+    suspend fun recordStreakAction(@Query("type") type: String): Response<ApiStandardResponse>
 
     // 2. Wallet & Subscriptions
     @GET("api/wallet")
-    suspend fun getWallet(): Response<ResponseBody>
+    suspend fun getWallet(@Query("lang") lang: String? = null): Response<ResponseBody>
 
     @POST("api/wallet")
     suspend fun postWalletAction(@Body request: ApiWalletPostRequest): Response<ApiStandardResponse>
@@ -339,7 +454,8 @@ interface JobTraqMobileApiService {
     @GET("api/quizzes")
     suspend fun getQuizzes(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/quizzes/progress")
@@ -355,7 +471,8 @@ interface JobTraqMobileApiService {
     @GET("api/interviews")
     suspend fun getInterviews(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/interviews/create")
@@ -365,7 +482,17 @@ interface JobTraqMobileApiService {
     @GET("api/questions")
     suspend fun getQuestions(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("sort") sort: String? = "newest",
+        @Query("difficulty") difficulty: String? = null,
+        @Query("category") category: String? = null,
+        @Query("lang") lang: String? = null
+    ): Response<ResponseBody>
+
+    @GET("api/questions/{id}/rating")
+    suspend fun getQuestionRating(
+        @retrofit2.http.Path("id") id: String,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/questions/bookmark")
@@ -379,7 +506,14 @@ interface JobTraqMobileApiService {
 
     // 6. Referrals & Engagement
     @GET("api/referrals/history")
-    suspend fun getReferralHistory(): Response<ResponseBody>
+    suspend fun getReferralHistory(@Query("lang") lang: String? = null): Response<ResponseBody>
+
+    @GET("api/referrals/leaderboard")
+    suspend fun getReferralLeaderboard(
+        @Query("tenant") tenant: String? = null,
+        @Query("limit") limit: Int = 50,
+        @Query("lang") lang: String? = null
+    ): Response<ResponseBody>
 
     @POST("api/referrals/nudge")
     suspend fun nudgeReferralFriend(@Body request: ApiNudgeRequest): Response<ApiStandardResponse>
@@ -391,7 +525,8 @@ interface JobTraqMobileApiService {
     @GET("api/community/posts")
     suspend fun getCommunityPosts(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/community/posts")
@@ -403,8 +538,11 @@ interface JobTraqMobileApiService {
     @POST("api/community/posts/like")
     suspend fun toggleCommunityPostLike(@Body request: ApiToggleLikeRequest): Response<ApiStandardResponse>
 
+    @POST("api/community/polls/vote")
+    suspend fun voteCommunityPoll(@Body request: ApiPollVoteRequest): Response<ApiStandardResponse>
+
     @GET("api/resumes")
-    suspend fun getResumes(): Response<ResponseBody>
+    suspend fun getResumes(@Query("lang") lang: String? = null): Response<ResponseBody>
 
     @POST("api/resumes")
     suspend fun createResume(@Body request: ApiCreateResumeRequest): Response<ApiStandardResponse>
@@ -413,7 +551,9 @@ interface JobTraqMobileApiService {
     @GET("api/resumes/scan-history")
     suspend fun getScanHistory(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 100
+        @Query("limit") limit: Int = 100,
+        @Query("sort") sort: String? = null,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/resumes/scan-history")
@@ -426,13 +566,14 @@ interface JobTraqMobileApiService {
     suspend fun deleteScanHistory(@Query("scanId") scanId: String): Response<ApiStandardResponse>
 
     @GET("api/tenants")
-    suspend fun getTenants(): Response<ResponseBody>
+    suspend fun getTenants(@Query("lang") lang: String? = null): Response<ResponseBody>
 
     // 8. Job Applications Tracker
     @GET("api/jobs/applications")
     suspend fun getJobApplications(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @POST("api/jobs/applications")
@@ -446,7 +587,7 @@ interface JobTraqMobileApiService {
 
     // 9. Profile, Settings & Dashboard
     @GET("api/settings")
-    suspend fun getSettings(): Response<ResponseBody>
+    suspend fun getSettings(@Query("lang") lang: String? = null): Response<ResponseBody>
 
     @POST("api/settings")
     suspend fun updateSettings(@Body request: ApiUpdateSettingsRequest): Response<ApiStandardResponse>
@@ -454,17 +595,19 @@ interface JobTraqMobileApiService {
     @GET("api/profile/activities")
     suspend fun getProfileActivities(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ResponseBody>
 
     @GET("api/dashboard")
-    suspend fun getDashboardSummary(): Response<ApiDashboardSummaryResponse>
+    suspend fun getDashboardSummary(@Query("lang") lang: String? = null): Response<ApiDashboardSummaryResponse>
 
     // 10. Blog & Insights
     @GET("api/blog")
     suspend fun getBlogPosts(
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("lang") lang: String? = null
     ): Response<ApiBlogResponse>
 
     @POST("api/blog")

@@ -59,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -80,6 +81,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.data.JobTraqRepository
 import com.example.data.QuizResult
 import com.example.data.UserEntity
 import com.example.data.QuestionEntity
@@ -104,6 +106,9 @@ fun ProfileDashboardScreen(
     onOpenEditModal: () -> Unit,
     onCloseEditModal: () -> Unit,
     onSaveProfile: (String, String, Int) -> Unit,
+    profileCompletionPercent: Int = 0,
+    profileCompletionChecklist: List<JobTraqRepository.ProfileCheckItem> = emptyList(),
+    onRefreshCompletion: (() -> Unit)? = null,
     recentQuizResults: List<QuizResult> = emptyList(),
     jobsCount: Int = 0,
     interviewsCount: Int = 0,
@@ -321,6 +326,150 @@ fun ProfileDashboardScreen(
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Profile Completion Progress Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("profile_completion_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Profile Completion",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                        }
+                        if (onRefreshCompletion != null) {
+                            TextButton(onClick = onRefreshCompletion) {
+                                Text(
+                                    "Refresh",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.size(56.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                progress = { profileCompletionPercent / 100f },
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface,
+                                strokeWidth = 5.dp
+                            )
+                            Text(
+                                text = "$profileCompletionPercent%",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            LinearProgressIndicator(
+                                progress = { profileCompletionPercent / 100f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            val completedCount = profileCompletionChecklist.count { it.completed }
+                            val totalCount = if (profileCompletionChecklist.isNotEmpty()) profileCompletionChecklist.size else 8
+                            Text(
+                                text = "$completedCount of $totalCount fields complete",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            )
+                        }
+                    }
+
+                    if (profileCompletionChecklist.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        profileCompletionChecklist.take(4).forEach { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (item.completed) Icons.Default.CheckCircle else Icons.Default.Psychology,
+                                    contentDescription = null,
+                                    tint = if (item.completed) Color(0xFF10B981) else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = item.label,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (item.completed) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (item.completed)
+                                            MaterialTheme.colorScheme.onSecondaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text(
+                                    text = if (item.completed) "✓ Done" else "To do",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (item.completed) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+                                    )
+                                )
+                            }
+                        }
+                        if (profileCompletionChecklist.size > 4) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "+${profileCompletionChecklist.size - 4} more items",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                                )
+                            )
                         }
                     }
                 }

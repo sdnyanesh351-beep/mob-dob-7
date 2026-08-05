@@ -21,10 +21,18 @@ import java.util.UUID
 
 class JobTraqRepository(
     private val sessionManager: SessionManager? = null,
-    private val resumeScanHistoryDao: ResumeScanHistoryDao? = null
+    private val resumeScanHistoryDao: ResumeScanHistoryDao? = null,
+    private val userDao: UserDao? = null,
+    private val streakDataStoreManager: StreakDataStoreManager? = null
 ) {
 
     private val apiScope = CoroutineScope(Dispatchers.IO)
+
+    private val _currentUserDisplayName = MutableStateFlow<String?>(null)
+
+    fun setCurrentUserDisplayName(name: String) {
+        _currentUserDisplayName.value = name.ifBlank { null }
+    }
 
     // Active Environment Profile (Default active profile is DEV with real data)
     private val _currentEnvironment = MutableStateFlow(AppEnvironment.DEV)
@@ -73,11 +81,15 @@ class JobTraqRepository(
         fetchQuizzesFromApi(base)
         fetchCommunityPostsFromApi(base)
         fetchReferralHistoryFromApi(base)
+        fetchLeaderboardFromApi(base)
         fetchWalletFromApi(base)
         fetchSettingsFromApi(base)
         fetchResumesFromApi(base)
         fetchScanHistoryFromApi(base)
         fetchDashboardDataFromApi(base)
+        fetchProfileFromApi(base)
+        fetchStreakFromApi(base)
+        fetchProfileActivitiesFromApi(base)
     }
 
     suspend fun fetchJobsFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
@@ -93,11 +105,11 @@ class JobTraqRepository(
         }
     }
 
-    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 1000) = withContext(Dispatchers.IO) {
+    suspend fun fetchQuestionsFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 1000, sort: String = "newest") = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) return@withContext
         try {
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
-            fetchQuestionsFromApi(apiService, page = page, limit = limit)
+            fetchQuestionsFromApi(apiService, page = page, limit = limit, sort = sort)
         } catch (e: Exception) { /* Leave empty for DEV/PROD */ }
     }
 
@@ -123,6 +135,38 @@ class JobTraqRepository(
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
             fetchReferralsFromApi(apiService)
         } catch (e: Exception) { /* Leave empty for DEV/PROD */ }
+    }
+
+    suspend fun fetchLeaderboardFromApi(baseUrl: String = _baseUrl.value, tenant: String? = null) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchLeaderboardFromApi(apiService, tenant = tenant)
+        } catch (e: Exception) { /* sample data fallback kept */ }
+    }
+
+    suspend fun fetchProfileFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchProfileFromApi(apiService)
+        } catch (e: Exception) { /* leave Room user data */ }
+    }
+
+    suspend fun fetchStreakFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchStreakFromApi(apiService)
+        } catch (e: Exception) { /* keep local streak */ }
+    }
+
+    suspend fun fetchProfileActivitiesFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 20) = withContext(Dispatchers.IO) {
+        if (baseUrl.isBlank()) return@withContext
+        try {
+            val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+            fetchProfileActivitiesFromApi(apiService, page = page, limit = limit)
+        } catch (e: Exception) { /* keep existing activity strings */ }
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -205,17 +249,33 @@ class JobTraqRepository(
         } catch (e: Exception) { /* Gracefully skip resumes fetch */ }
     }
 
-    suspend fun fetchScanHistoryFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
+    suspend fun fetchScanHistoryFromApi(baseUrl: String = _baseUrl.value, page: Int = 1, limit: Int = 20, sort: String? = null) = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) return@withContext
         try {
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
-            fetchScanHistoryFromApi(apiService)
+            fetchScanHistoryFromApi(apiService, page = page, limit = limit, sort = sort)
         } catch (e: Exception) { /* Gracefully skip scan history fetch */ }
     }
 
-    private suspend fun fetchScanHistoryFromApi(apiService: JobTraqMobileApiService) {
+    suspend fun loadMoreScanHistory(baseUrl: String = _baseUrl.value) {
+        if (!scanHistoryHasMore.value) return
+        val nextPage = (scanHistoryPage.value) + 1
+        apiScope.launch {
+            fetchScanHistoryFromApi(baseUrl, page = nextPage, limit = 20)
+        }
+    }
+
+    suspend fun loadMoreProfileActivities(baseUrl: String = _baseUrl.value) {
+        if (!activityLogsHasMore.value) return
+        val nextPage = (activityLogsPage.value) + 1
+        apiScope.launch {
+            fetchProfileActivitiesFromApi(baseUrl, page = nextPage, limit = 20)
+        }
+    }
+
+    private suspend fun fetchScanHistoryFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 20, sort: String? = null) {
         try {
-            val res = apiService.getScanHistory()
+            val res = apiService.getScanHistory(page = page, limit = limit, sort = sort)
             if (res.isSuccessful && res.body() != null) {
                 val jsonStr = res.body()!!.string()
                 val obj = org.json.JSONObject(jsonStr)
@@ -254,7 +314,13 @@ class JobTraqRepository(
                             )
                         )
                     }
-                    _resumeScanHistory.value = list.sortedByDescending { it.scanDate }
+                    if (page == 1) {
+                        _resumeScanHistory.value = list.sortedByDescending { it.scanDate }
+                    } else {
+                        _resumeScanHistory.value = (_resumeScanHistory.value + list).sortedByDescending { it.scanDate }
+                    }
+                    scanHistoryPage.value = page
+                    scanHistoryHasMore.value = list.size == limit
                     resumeScanHistoryDao?.insertAllScans(list)
                 }
             }
@@ -471,6 +537,39 @@ class JobTraqRepository(
     // Phase 2: Questions & Quizzes
     private val _questions = MutableStateFlow<List<QuestionEntity>>(emptyList())
     val questions: StateFlow<List<QuestionEntity>> = _questions.asStateFlow()
+
+    // Phase 2.3: Profile completion model + state
+    data class ProfileCheckItem(
+        val field: String,
+        val label: String,
+        val completed: Boolean
+    )
+
+    data class ProfileCompletion(
+        val percent: Int,
+        val total: Int,
+        val completed: Int,
+        val checklist: List<ProfileCheckItem>
+    )
+
+    private val _profileCompletion = MutableStateFlow(ProfileCompletion(0, 8, 0, emptyList()))
+    val profileCompletion: StateFlow<ProfileCompletion> = _profileCompletion.asStateFlow()
+
+    // Phase 2.2: Scan history & activity pagination
+    val scanHistoryPage = MutableStateFlow(1)
+    val scanHistoryHasMore = MutableStateFlow(false)
+    val scanHistoryIsLoading = MutableStateFlow(false)
+    val activityLogsPage = MutableStateFlow(1)
+    val activityLogsHasMore = MutableStateFlow(false)
+    val activityLogsIsLoading = MutableStateFlow(false)
+
+    // Phase 2.4: Streak warning banner for graceful degradation
+    private val _streakSource = MutableStateFlow("local") // "api" | "local"
+    val streakSource: StateFlow<String> = _streakSource.asStateFlow()
+
+    // Phase 1.1: Leaderboard source fallback warning
+    private val _leaderboardSource = MutableStateFlow("sample") // "api" | "topEarners" | "sample"
+    val leaderboardSource: StateFlow<String> = _leaderboardSource.asStateFlow()
 
     private val _quizzes = MutableStateFlow<List<QuizEntity>>(emptyList())
     val quizzes: StateFlow<List<QuizEntity>> = _quizzes.asStateFlow()
@@ -939,9 +1038,10 @@ class JobTraqRepository(
     }
 
     fun addCommentToPost(postId: String, commentText: String) {
+        val displayName = _currentUserDisplayName.value ?: "You"
         val newComment = CommentEntity(
             id = "c-${UUID.randomUUID().toString().take(6)}",
-            authorName = "Alex Taylor",
+            authorName = displayName,
             authorRole = "Candidate",
             timestamp = "Just now",
             text = commentText
@@ -962,6 +1062,62 @@ class JobTraqRepository(
                 try {
                     val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
                     apiService.addCommunityComment(ApiCreateCommentRequest(postId = postId, text = commentText))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun votePoll(postId: String, option: String, optionIndex: Int = -1) {
+        val resolvedOption = if (option.isBlank() && optionIndex >= 0) {
+            val post = _feedPosts.value.firstOrNull { it.id == postId }
+            post?.pollOptions?.getOrNull(optionIndex)?.option ?: option
+        } else option
+        if (resolvedOption.isBlank()) return
+
+        _feedPosts.value = _feedPosts.value.map { post ->
+            if (post.id != postId) return@map post
+            val currentVote = post.userPollVote
+            val newOptions = post.pollOptions.mapIndexed { idx, opt ->
+                val matchesIdx = optionIndex >= 0 && idx == optionIndex
+                val matchesName = opt.option.equals(resolvedOption, ignoreCase = true)
+                val isTarget = matchesIdx || matchesName
+                val wasVoted = currentVote != null && opt.option.equals(currentVote, ignoreCase = true)
+                when {
+                    isTarget && !wasVoted -> opt.copy(votes = opt.votes + 1)
+                    isTarget && wasVoted -> opt
+                    !isTarget && wasVoted && currentVote != null -> opt.copy(votes = (opt.votes - 1).coerceAtLeast(0))
+                    else -> opt
+                }
+            }
+            post.copy(
+                pollOptions = newOptions,
+                userPollVote = if (currentVote == resolvedOption) null else resolvedOption
+            )
+        }
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    val resolvedIdx = if (optionIndex >= 0) {
+                        optionIndex
+                    } else {
+                        _feedPosts.value.firstOrNull { it.id == postId }
+                            ?.pollOptions
+                            ?.indexOfFirst { it.option.equals(resolvedOption, ignoreCase = true) }
+                            ?: -1
+                    }
+                    apiService.voteCommunityPoll(
+                        ApiPollVoteRequest(
+                            postId = postId,
+                            option = resolvedOption,
+                            optionIndex = resolvedIdx
+                        )
+                    )
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -1497,11 +1653,15 @@ class JobTraqRepository(
             fetchQuizzesFromApi(apiService)
             fetchInterviewsFromApi(apiService)
             fetchReferralsFromApi(apiService)
+            fetchLeaderboardFromApi(apiService)
             fetchWalletFromApi(apiService)
             fetchDashboardDataFromApi(apiService)
             fetchBlogPostsFromApi(apiService)
             fetchResumesFromApi(apiService)
             fetchScanHistoryFromApi(apiService)
+            fetchProfileFromApi(apiService)
+            fetchStreakFromApi(apiService)
+            fetchProfileActivitiesFromApi(apiService)
         } catch (e: Exception) {
             // Silence network connection issues for seamless UI resilience
         }
@@ -1557,6 +1717,7 @@ class JobTraqRepository(
                     val obj = JSONObject(jsonStr)
                     obj.optJSONArray("data") ?: obj.optJSONArray("posts")
                 }
+                val previousMap = _feedPosts.value.associateBy { it.id }
                 if (jsonArray != null && jsonArray.length() > 0) {
                     val list = mutableListOf<FeedPostEntity>()
                     for (i in 0 until jsonArray.length()) {
@@ -1608,23 +1769,81 @@ class JobTraqRepository(
                                 )
                             }
                         }
+
+                        val commentsList = mutableListOf<CommentEntity>()
+                        val commentsArr = item.optJSONArray("comments")
+                        if (commentsArr != null) {
+                            for (j in 0 until commentsArr.length()) {
+                                val cObj = commentsArr.getJSONObject(j)
+                                var cAuthor = cObj.optString("authorName")
+                                if (cAuthor.isBlank()) cAuthor = cObj.optString("author")
+                                if (cAuthor.isBlank()) {
+                                    val cUser = cObj.optJSONObject("user")
+                                    if (cUser != null) cAuthor = cUser.optString("name").ifBlank { cUser.optString("fullName", "Member") }
+                                }
+                                var cRole = cObj.optString("authorRole")
+                                if (cRole.isBlank()) {
+                                    val cUser = cObj.optJSONObject("user")
+                                    if (cUser != null) cRole = cUser.optString("role").ifBlank { "Candidate" }
+                                }
+                                commentsList.add(
+                                    CommentEntity(
+                                        id = cObj.optString("id").ifBlank { "c-$j" },
+                                        authorName = cAuthor.ifBlank { "Member" },
+                                        authorRole = cRole.ifBlank { "Candidate" },
+                                        timestamp = cObj.optString("timestamp", "Just now"),
+                                        text = cObj.optString("text").ifBlank { cObj.optString("content", "") }
+                                    )
+                                )
+                            }
+                        }
+
                         val evTitle = item.optString("eventTitle").takeIf { it.isNotBlank() }
                         val evDate = item.optString("eventDate").takeIf { it.isNotBlank() }
                         val evLoc = item.optString("eventLocation").takeIf { it.isNotBlank() }
+                        val parsedId = item.optString("id").ifBlank { "post-$i" }
+                        val prev = previousMap[parsedId]
+
+                        val backendLikes = item.optInt("likesCount", item.optInt("likes", 0))
+                        val backendIsLiked = item.optBoolean("isLiked", false)
+                        val mergedLikesCount = if (prev != null && prev.isLiked && !backendIsLiked) {
+                            (backendLikes + 1).coerceAtLeast(prev.likesCount)
+                        } else if (prev != null && !prev.isLiked && backendIsLiked) {
+                            backendLikes
+                        } else if (prev != null) {
+                            maxOf(backendLikes, prev.likesCount)
+                        } else {
+                            backendLikes
+                        }
+                        val mergedIsLiked = prev?.isLiked ?: backendIsLiked
+                        val mergedComments = (commentsList + (prev?.comments ?: emptyList())).distinctBy { it.text.lowercase().trim() to it.authorName }
+                        val userVote = prev?.userPollVote ?: item.optString("userPollVote").takeIf { it.isNotBlank() }
+                        val mergedPolls = if (prev != null && prev.userPollVote != null) {
+                            pollList.map { p ->
+                                val prevOpt = prev.pollOptions.firstOrNull { it.option.equals(p.option, ignoreCase = true) }
+                                if (prevOpt != null && p.option.equals(prev.userPollVote, ignoreCase = true)) {
+                                    p.copy(votes = maxOf(p.votes, prevOpt.votes))
+                                } else if (prevOpt != null) {
+                                    p.copy(votes = maxOf(p.votes, prevOpt.votes))
+                                } else p
+                            }
+                        } else pollList
 
                         list.add(
                             FeedPostEntity(
-                                id = item.optString("id").ifBlank { "post-$i" },
+                                id = parsedId,
                                 authorName = resolvedAuthor,
                                 authorRole = resolvedRole,
                                 content = item.optString("content").ifBlank { item.optString("title", "") },
-                                likesCount = item.optInt("likesCount", item.optInt("likes", 0)),
-                                commentsCount = item.optInt("commentsCount", item.optInt("comments", 0)),
-                                isLiked = item.optBoolean("isLiked", false),
+                                likesCount = mergedLikesCount,
+                                commentsCount = maxOf(item.optInt("commentsCount", item.optInt("comments", 0)), mergedComments.size, prev?.commentsCount ?: 0),
+                                isLiked = mergedIsLiked,
                                 timestamp = item.optString("timestamp", "Recently"),
                                 tenantId = item.optString("tenantId", _currentTenant.value),
+                                comments = mergedComments,
                                 type = item.optString("type", "Discussion"),
-                                pollOptions = pollList,
+                                pollOptions = mergedPolls,
+                                userPollVote = userVote,
                                 eventTitle = evTitle,
                                 eventDate = evDate,
                                 eventLocation = evLoc
@@ -1638,9 +1857,9 @@ class JobTraqRepository(
         }
     }
 
-    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 1000) {
+    private suspend fun fetchQuestionsFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 1000, sort: String = "newest") {
         try {
-            val res = apiService.getQuestions(page = page, limit = limit)
+            val res = apiService.getQuestions(page = page, limit = limit, sort = sort)
             if (res.isSuccessful && res.body() != null) {
                 val jsonStr = res.body()!!.string()
                 val jsonArray = if (jsonStr.trim().startsWith("[")) {
@@ -1685,7 +1904,10 @@ class JobTraqRepository(
                                 sampleAnswer = item.optString("sampleAnswer").ifBlank { item.optString("answerOrTip") }.ifBlank { item.optString("answer", "Sample answer") },
                                 options = finalOptions,
                                 correctOptionIndex = correctIdx,
-                                isBookmarked = item.optBoolean("isBookmarked", false)
+                                isBookmarked = item.optBoolean("isBookmarked", false),
+                                avgRating = item.optDouble("avgRating", item.optDouble("rating", 0.0)),
+                                ratingCount = item.optInt("ratingCount", item.optInt("votes", 0)),
+                                userRating = item.optInt("userRating", 0)
                             )
                         )
                     }
@@ -1967,9 +2189,246 @@ class JobTraqRepository(
                     if (activityLogsList.isNotEmpty()) {
                         _activityLogs.value = activityLogsList
                     }
+
+                    val coinTopEarners = dataObj?.coinStats?.topEarners
+                    if (_referralLeaderboard.value.isEmpty() && !coinTopEarners.isNullOrEmpty()) {
+                        val derivedList = mutableListOf<ReferralLeaderboardUser>()
+                        coinTopEarners.forEachIndexed { i, anyItem ->
+                            try {
+                                val map = anyItem as? Map<*, *>
+                                if (map != null) {
+                                    val name = (map["name"] as? String) ?: (map["userName"] as? String) ?: "Top Earner ${i + 1}"
+                                    val xp = (map["xp"] as? Int) ?: (map["totalXp"] as? Int) ?: 0
+                                    val referrals = (map["referrals"] as? Int) ?: (map["successfulReferrals"] as? Int) ?: 0
+                                    val coins = (map["coins"] as? Int) ?: (map["coinsEarned"] as? Int) ?: 0
+                                    val userUid = (map["userId"] as? String) ?: "u-$i"
+                                    val badge = (map["avatarBadgeIndex"] as? Int) ?: 0
+                                    derivedList.add(
+                                        ReferralLeaderboardUser(
+                                            id = userUid,
+                                            rank = i + 1,
+                                            name = name,
+                                            points = xp,
+                                            referrals = referrals,
+                                            coins = coins,
+                                            isYou = false,
+                                            avatarBadgeIndex = badge
+                                        )
+                                    )
+                                }
+                            } catch (_: Exception) {}
+                        }
+                        if (derivedList.isNotEmpty()) {
+                            _referralLeaderboard.value = derivedList.sortedBy { it.rank }
+                            _leaderboardSource.value = "topEarners"
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {}
+    }
+
+    private suspend fun fetchLeaderboardFromApi(apiService: JobTraqMobileApiService, tenant: String? = null) {
+        try {
+            val res = apiService.getReferralLeaderboard(tenant = tenant, limit = 50)
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val jsonArray = if (jsonStr.trim().startsWith("[")) {
+                    JSONArray(jsonStr)
+                } else {
+                    val obj = JSONObject(jsonStr)
+                    obj.optJSONArray("leaderboard") ?: obj.optJSONArray("data") ?: obj.optJSONArray("topEarners")
+                }
+                if (jsonArray != null && jsonArray.length() > 0) {
+                    val list = mutableListOf<ReferralLeaderboardUser>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.getJSONObject(i)
+                        val userId = item.optString("userId").ifBlank { item.optString("id", "u-$i") }
+                        list.add(
+                            ReferralLeaderboardUser(
+                                id = userId,
+                                rank = item.optInt("rank", i + 1),
+                                name = item.optString("name").ifBlank { item.optString("fullName", "Member ${i + 1}") },
+                                points = item.optInt("xp", item.optInt("points", item.optInt("totalXp", 0))),
+                                referrals = item.optInt("successfulReferrals", item.optInt("referrals", 0)),
+                                coins = item.optInt("totalEarnedCoins", item.optInt("coins", 0)),
+                                isYou = false,
+                                avatarBadgeIndex = item.optInt("avatarBadgeIndex", 0)
+                            )
+                        )
+                    }
+                    if (list.isNotEmpty()) {
+                        _referralLeaderboard.value = list.sortedBy { it.rank }
+                        _leaderboardSource.value = "api"
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun fetchProfileFromApi(apiService: JobTraqMobileApiService) {
+        try {
+            val res = apiService.getUserMe()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val root = if (jsonStr.trim().startsWith("{")) {
+                    val obj = JSONObject(jsonStr)
+                    obj.optJSONObject("data") ?: obj.optJSONObject("user") ?: obj.optJSONObject("profile") ?: obj
+                } else null
+                if (root != null) {
+                    val skillsJson = root.optJSONArray("skills")
+                    val skillsList = mutableListOf<String>()
+                    if (skillsJson != null) {
+                        for (i in 0 until skillsJson.length()) {
+                            val s = skillsJson.optString(i)
+                            if (s.isNotBlank()) skillsList.add(s)
+                        }
+                    }
+                    val skillsStr = skillsList.joinToString(",")
+                    val fullName = root.optString("fullName").ifBlank { root.optString("name", "") }
+                    val headlineStr = root.optString("headline", "")
+                    val locationStr = root.optString("location", "")
+                    val preferredRole = root.optString("preferredRole", "")
+                    val expectedSalary = root.optString("expectedSalary", "")
+                    val resumeUrl = root.optString("resumeUrl", "")
+                    val phone = root.optString("phone", "")
+                    val avatar = root.optInt("avatarBadgeIndex", 0)
+                    val language = root.optString("language", "en").ifBlank { "en" }
+
+                    val uDao = userDao
+                    if (uDao != null) {
+                        val all = withContext(Dispatchers.IO) { uDao.getAllUsers() }
+                        val existing = all.firstOrNull()
+                        if (existing != null) {
+                            val merged = existing.copy(
+                                fullName = fullName.ifBlank { existing.fullName },
+                                phone = phone.ifBlank { existing.phone },
+                                headline = headlineStr.ifBlank { existing.headline },
+                                location = locationStr.ifBlank { existing.location },
+                                skills = skillsStr.ifBlank { existing.skills },
+                                resumeUrl = resumeUrl.ifBlank { existing.resumeUrl },
+                                preferredRole = preferredRole.ifBlank { existing.preferredRole },
+                                expectedSalary = expectedSalary.ifBlank { existing.expectedSalary },
+                                avatarBadgeIndex = if (avatar != 0) avatar else existing.avatarBadgeIndex,
+                                language = if (language != "en") language else existing.language
+                            )
+                            withContext(Dispatchers.IO) { uDao.updateUser(merged) }
+                            setCurrentUserDisplayName(merged.fullName)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun fetchStreakFromApi(apiService: JobTraqMobileApiService) {
+        try {
+            val res = apiService.getStreak()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val obj = if (jsonStr.trim().startsWith("{")) {
+                    val root = JSONObject(jsonStr)
+                    root.optJSONObject("data") ?: root
+                } else null
+                if (obj != null) {
+                    val currentStreak = obj.optInt("currentStreak", obj.optInt("dayStreak", obj.optInt("streakDays", 0)))
+                    val longestStreak = obj.optInt("longestStreak", obj.optInt("bestStreak", 0))
+                    val freezes = obj.optInt("streakFreezesAvailable", obj.optInt("freezesRemaining", obj.optInt("streakFreezes", 0)))
+                    val activeToday = obj.optBoolean("isActiveToday", false)
+                    val weeklyPattern = obj.optJSONArray("weeklyPattern")
+                    val historyList = _dailyStreakState.value.streakHistoryDays.toMutableList()
+                    if (weeklyPattern != null && weeklyPattern.length() == 7) {
+                        historyList.clear()
+                        for (i in 0 until weeklyPattern.length()) {
+                            historyList.add(weeklyPattern.optBoolean(i, false))
+                        }
+                    }
+                    _dailyStreakState.value = _dailyStreakState.value.copy(
+                        streakDays = currentStreak,
+                        streakHistoryDays = if (historyList.size == 7) historyList else _dailyStreakState.value.streakHistoryDays,
+                        dailyChallengeCompletedToday = activeToday
+                    )
+                    _walletState.value = _walletState.value.copy(
+                        streakDays = currentStreak,
+                        streakFreezes = freezes
+                    )
+                    val sm = streakDataStoreManager
+                    if (sm != null) {
+                        try {
+                            sm.overrideStreakData(currentStreak, longestStreak, freezes, activeToday)
+                        } catch (_: Exception) {}
+                    }
+                    _streakSource.value = "api"
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun fetchProfileActivitiesFromApi(apiService: JobTraqMobileApiService, page: Int = 1, limit: Int = 20) {
+        try {
+            val res = apiService.getProfileActivities(page = page, limit = limit)
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val jsonArray = if (jsonStr.trim().startsWith("[")) {
+                    JSONArray(jsonStr)
+                } else {
+                    val obj = JSONObject(jsonStr)
+                    obj.optJSONArray("data") ?: obj.optJSONArray("activities") ?: obj.optJSONArray("logs")
+                }
+                if (jsonArray != null && jsonArray.length() > 0) {
+                    val list = mutableListOf<String>()
+                    for (i in 0 until jsonArray.length()) {
+                        val item = jsonArray.optJSONObject(i)
+                        if (item != null) {
+                            val desc = item.optString("description").ifBlank { item.optString("text").ifBlank { item.optString("message", "") } }
+                            if (desc.isNotBlank()) {
+                                list.add(desc)
+                            }
+                        } else {
+                            val raw = jsonArray.optString(i, "")
+                            if (raw.isNotBlank()) list.add(raw)
+                        }
+                    }
+                    if (list.isNotEmpty()) {
+                        if (page == 1) {
+                            _activityLogs.value = list
+                        } else {
+                            _activityLogs.value = _activityLogs.value + list
+                        }
+                        activityLogsPage.value = page
+                        activityLogsHasMore.value = list.size == limit
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun updateProfileCompletion(
+        user: UserEntity?,
+        jobsCount: Int,
+        interviewsCount: Int,
+        resumeCount: Int,
+        skillsCount: Int
+    ) {
+        val checklist = listOfNotNull(
+            ProfileCheckItem("fullName", "Add your name", !(user?.fullName.isNullOrBlank())),
+            ProfileCheckItem("email", "Verify your email", !(user?.email.isNullOrBlank())),
+            ProfileCheckItem("phone", "Add phone number", !(user?.phone.isNullOrBlank())),
+            ProfileCheckItem("skills", "List your skills", skillsCount > 0 || !(user?.skills.isNullOrBlank())),
+            ProfileCheckItem("preferredRole", "Set your target role", !(user?.preferredRole.isNullOrBlank())),
+            ProfileCheckItem("headline", "Add a headline/location", !((user?.headline.isNullOrBlank() && user?.location.isNullOrBlank()))),
+            ProfileCheckItem("jobApps", "Add a job application", jobsCount >= 1),
+            ProfileCheckItem("resume", "Upload a resume/do a scan", resumeCount >= 1)
+        )
+        val completed = checklist.count { it.completed }
+        val total = checklist.size
+        val percent = if (total == 0) 0 else (completed * 100) / total
+        _profileCompletion.value = ProfileCompletion(
+            percent = percent.coerceIn(0, 100),
+            total = total,
+            completed = completed,
+            checklist = checklist
+        )
     }
 
     private suspend fun fetchBlogPostsFromApi(apiService: JobTraqMobileApiService) {

@@ -19,9 +19,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.InterviewEntity
 import com.example.data.JobEntity
 import com.example.data.JobTraqRepository
 import com.example.data.UserEntity
@@ -104,17 +106,22 @@ fun JobTraqMainContainer(
 
     val context = LocalContext.current
     val interviewDao = remember(context) { AuthDatabase.getDatabase(context).interviewDao() }
+    val userDao = remember(context) { AuthDatabase.getDatabase(context).userDao() }
     val resumeScanHistoryDao = remember(context) { AuthDatabase.getDatabase(context).resumeScanHistoryDao() }
     val streakDataStoreManager = remember(context) { StreakDataStoreManager(context) }
 
-    val repository = remember(sessionManager, resumeScanHistoryDao) {
-        JobTraqRepository(sessionManager, resumeScanHistoryDao)
+    val repository = remember(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager) {
+        JobTraqRepository(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager)
     }
 
     val streakData by streakDataStoreManager.streakDataFlow.collectAsStateWithLifecycle(initialValue = StreakData())
 
     LaunchedEffect(Unit) {
         streakDataStoreManager.recordDailyLogin()
+    }
+
+    LaunchedEffect(user.fullName) {
+        repository.setCurrentUserDisplayName(user.fullName)
     }
 
     LaunchedEffect(initialTenant, baseUrl, activeEnvironment) {
@@ -153,6 +160,17 @@ fun JobTraqMainContainer(
     val referralLeaderboard by repository.referralLeaderboard.collectAsStateWithLifecycle()
     val referralActivityLogs by repository.referralActivityLogs.collectAsStateWithLifecycle()
     val activityLogs by repository.activityLogs.collectAsStateWithLifecycle()
+    val interviews by remember(currentTenant) { interviewDao.getInterviewsFlow(currentTenant.ifBlank { "platform" }) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val profileCompletion by repository.profileCompletion.collectAsStateWithLifecycle()
+    val leaderboardSource by repository.leaderboardSource.collectAsStateWithLifecycle()
+    val streakSource by repository.streakSource.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { listOf(repository.jobs.value.size, interviews.size, repository.resumeScanHistory.value.size) }
+            .collect { (jc, ic, rc) ->
+                repository.updateProfileCompletion(user, jc, ic, rc, user.skills.split(",").filter{it.isNotBlank()}.size)
+            }
+    }
 
     var isSettingsScreenOpen by remember { mutableStateOf(false) }
     var isReferralsScreenOpen by remember { mutableStateOf(false) }
@@ -640,6 +658,10 @@ fun JobTraqMainContainer(
                                     walletState = walletState,
                                     alumniMentors = alumniMentors,
                                     currentTenant = currentTenant,
+                                    leaderboard = referralLeaderboard,
+                                    profileCompletionPercent = profileCompletion.percent,
+                                    leaderboardSource = leaderboardSource,
+                                    streakSource = streakSource,
                                     onRefresh = {
                                         coroutineScope.launch {
                                             repository.syncAllDataFromApi(baseUrl)
@@ -660,6 +682,7 @@ fun JobTraqMainContainer(
                                     },
                                     onToggleLike = { id -> repository.toggleLikePost(id) },
                                     onAddComment = { id, comment -> repository.addCommentToPost(id, comment) },
+                                    onVotePoll = { postId, option, idx -> repository.votePoll(postId, option, idx) },
                                     onShowToast = { showToast(it) },
                                     onRedeemCode = { code -> repository.redeemPromoCode(code) },
                                     onPurchaseStreakFreeze = { repository.purchaseStreakFreeze() }
@@ -762,6 +785,17 @@ fun JobTraqMainContainer(
                                     onOpenEditModal = onOpenEditModal,
                                     onCloseEditModal = onCloseEditModal,
                                     onSaveProfile = onSaveProfile,
+                                    profileCompletionPercent = profileCompletion.percent,
+                                    profileCompletionChecklist = profileCompletion.checklist,
+                                    onRefreshCompletion = {
+                                        repository.updateProfileCompletion(
+                                            user,
+                                            repository.jobs.value.size,
+                                            interviews.size,
+                                            repository.resumeScanHistory.value.size,
+                                            user.skills.split(",").filter{it.isNotBlank()}.size
+                                        )
+                                    },
                                     recentQuizResults = recentQuizResults,
                                     jobsCount = jobs.size,
                                     interviewsCount = jobs.count { it.interviewDate != null },

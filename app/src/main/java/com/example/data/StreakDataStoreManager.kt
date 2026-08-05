@@ -130,6 +130,23 @@ class StreakDataStoreManager(private val context: Context) {
         }
     }
 
+    suspend fun overrideStreakData(currentStreak: Int, longestStreak: Int, freezes: Int, isActiveToday: Boolean = true) {
+        val todayStr = getTodayDateString()
+        context.streakDataStore.edit { prefs ->
+            prefs[Keys.STREAK_DAYS] = maxOf(0, currentStreak)
+            prefs[Keys.BEST_STREAK] = maxOf(1, longestStreak, currentStreak)
+            prefs[Keys.STREAK_FREEZES] = maxOf(0, freezes)
+            if (isActiveToday) {
+                prefs[Keys.LAST_LOGIN_DATE] = todayStr
+                val total = (prefs[Keys.TOTAL_LOGINS] ?: 1)
+                val lastDate = prefs[Keys.LAST_LOGIN_DATE]
+                if (lastDate != todayStr) {
+                    prefs[Keys.TOTAL_LOGINS] = total + 1
+                }
+            }
+        }
+    }
+
     private fun getTodayDateString(): String {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         return sdf.format(Date())
