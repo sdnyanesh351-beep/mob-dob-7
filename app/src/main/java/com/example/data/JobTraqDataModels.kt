@@ -94,7 +94,17 @@ data class FeedPostEntity(
     val userPollVote: String? = null,
     val eventTitle: String? = null,
     val eventDate: String? = null,
-    val eventLocation: String? = null
+    val eventLocation: String? = null,
+    val attendees: Int = 0,
+    val capacity: Int = 0,
+    val registeredByMe: Boolean = false,
+    val assignedTo: String? = null,
+    val status: String? = null,
+    val imageUrl: String? = null,
+    val tags: List<String> = emptyList(),
+    val isPinned: Boolean = false,
+    val moderationStatus: String = "visible",
+    val flagCount: Int = 0
 )
 
 data class ResumeEntity(

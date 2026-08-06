@@ -163,14 +163,20 @@ data class ApiPollOptionDto(
 )
 
 data class ApiCreatePostRequest(
-    val title: String,
+    val title: String? = null,
     val content: String,
     val type: String, // "text", "poll", "event", "request"
+    val tags: List<String>? = null,
+    val imageUrl: String? = null,
+    val attachmentUrl: String? = null,
     val pollOptions: List<ApiPollOptionDto>? = null,
     val eventTitle: String? = null,
     val eventDate: String? = null,
     val eventLocation: String? = null,
-    val capacity: Int? = null
+    val attendees: Int? = 0,
+    val capacity: Int? = 0,
+    val assignedTo: String? = null,
+    val status: String? = null
 )
 
 data class ApiCreateCommentRequest(
@@ -184,8 +190,17 @@ data class ApiToggleLikeRequest(
 
 data class ApiPollVoteRequest(
     val postId: String,
-    val option: String,
-    val optionIndex: Int = -1
+    val optionIndex: Int,
+    val optionId: Int? = null,
+    val option: String? = null
+)
+
+data class ApiEventRegisterRequest(
+    val postId: String
+)
+
+data class ApiRequestAssignRequest(
+    val postId: String
 )
 
 data class ApiCreateResumeRequest(
@@ -540,6 +555,12 @@ interface JobTraqMobileApiService {
 
     @POST("api/community/polls/vote")
     suspend fun voteCommunityPoll(@Body request: ApiPollVoteRequest): Response<ApiStandardResponse>
+
+    @POST("api/community/events/register")
+    suspend fun toggleCommunityEventRegistration(@Body request: ApiEventRegisterRequest): Response<ApiStandardResponse>
+
+    @POST("api/community/requests/assign")
+    suspend fun assignCommunityRequestToMe(@Body request: ApiRequestAssignRequest): Response<ApiStandardResponse>
 
     @GET("api/resumes")
     suspend fun getResumes(@Query("lang") lang: String? = null): Response<ResponseBody>

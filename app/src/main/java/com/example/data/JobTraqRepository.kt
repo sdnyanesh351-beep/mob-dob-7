@@ -970,6 +970,7 @@ class JobTraqRepository(
             "[$title]\n$content"
         }
         val localPollList = pollOptions?.map { PollOptionEntity(it, 0) } ?: emptyList()
+        val resolvedCapacity = capacity?.takeIf { it > 0 } ?: 0
         val newPost = FeedPostEntity(
             id = "post-${UUID.randomUUID().toString().take(6)}",
             authorName = authorName,
@@ -983,7 +984,15 @@ class JobTraqRepository(
             pollOptions = localPollList,
             eventTitle = eventTitle,
             eventDate = eventDate,
-            eventLocation = eventLocation
+            eventLocation = eventLocation,
+            attendees = 0,
+            capacity = resolvedCapacity,
+            registeredByMe = false,
+            assignedTo = null,
+            status = when (type.trim().lowercase()) {
+                "request" -> "open"
+                else -> null
+            }
         )
         _feedPosts.value = listOf(newPost) + _feedPosts.value
         // Award XP
@@ -1070,31 +1079,43 @@ class JobTraqRepository(
     }
 
     fun votePoll(postId: String, option: String, optionIndex: Int = -1) {
-        val resolvedOption = if (option.isBlank() && optionIndex >= 0) {
-            val post = _feedPosts.value.firstOrNull { it.id == postId }
-            post?.pollOptions?.getOrNull(optionIndex)?.option ?: option
-        } else option
-        if (resolvedOption.isBlank()) return
+        val resolvedIndex: Int = if (optionIndex >= 0) {
+            optionIndex
+        } else {
+            _feedPosts.value.firstOrNull { it.id == postId }
+                ?.pollOptions
+                ?.indexOfFirst { it.option.equals(option, ignoreCase = true) }
+                ?: -1
+        }
+        if (resolvedIndex < 0) return
+        val resolvedOptionName = _feedPosts.value.firstOrNull { it.id == postId }
+            ?.pollOptions?.getOrNull(resolvedIndex)?.option ?: option.ifBlank { null } ?: return
 
         _feedPosts.value = _feedPosts.value.map { post ->
             if (post.id != postId) return@map post
-            val currentVote = post.userPollVote
-            val newOptions = post.pollOptions.mapIndexed { idx, opt ->
-                val matchesIdx = optionIndex >= 0 && idx == optionIndex
-                val matchesName = opt.option.equals(resolvedOption, ignoreCase = true)
-                val isTarget = matchesIdx || matchesName
-                val wasVoted = currentVote != null && opt.option.equals(currentVote, ignoreCase = true)
-                when {
-                    isTarget && !wasVoted -> opt.copy(votes = opt.votes + 1)
-                    isTarget && wasVoted -> opt
-                    !isTarget && wasVoted && currentVote != null -> opt.copy(votes = (opt.votes - 1).coerceAtLeast(0))
-                    else -> opt
+            val currentVoteName = post.userPollVote
+            val currentVoteIndex = if (currentVoteName != null) {
+                post.pollOptions.indexOfFirst { it.option.equals(currentVoteName, ignoreCase = true) }
+            } else -1
+
+            if (currentVoteIndex == resolvedIndex) {
+                // Retract vote on same option
+                val newOptions = post.pollOptions.mapIndexed { idx, opt ->
+                    if (idx == resolvedIndex) opt.copy(votes = (opt.votes - 1).coerceAtLeast(0)) else opt
                 }
+                post.copy(pollOptions = newOptions, userPollVote = null)
+            } else {
+                // Switch or cast first vote: decrement old if any, increment new
+                val newOptions = post.pollOptions.mapIndexed { idx, opt ->
+                    when {
+                        idx == currentVoteIndex && currentVoteIndex >= 0 ->
+                            opt.copy(votes = (opt.votes - 1).coerceAtLeast(0))
+                        idx == resolvedIndex -> opt.copy(votes = opt.votes + 1)
+                        else -> opt
+                    }
+                }
+                post.copy(pollOptions = newOptions, userPollVote = resolvedOptionName)
             }
-            post.copy(
-                pollOptions = newOptions,
-                userPollVote = if (currentVote == resolvedOption) null else resolvedOption
-            )
         }
 
         val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
@@ -1103,21 +1124,76 @@ class JobTraqRepository(
             apiScope.launch {
                 try {
                     val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
-                    val resolvedIdx = if (optionIndex >= 0) {
-                        optionIndex
-                    } else {
-                        _feedPosts.value.firstOrNull { it.id == postId }
-                            ?.pollOptions
-                            ?.indexOfFirst { it.option.equals(resolvedOption, ignoreCase = true) }
-                            ?: -1
-                    }
                     apiService.voteCommunityPoll(
                         ApiPollVoteRequest(
                             postId = postId,
-                            option = resolvedOption,
-                            optionIndex = resolvedIdx
+                            optionIndex = resolvedIndex,
+                            option = resolvedOptionName
                         )
                     )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun toggleEventRegistration(postId: String) {
+        val capacityFullPrecheck = _feedPosts.value.firstOrNull { it.id == postId }?.let {
+            it.capacity > 0 && it.attendees >= it.capacity && !it.registeredByMe
+        } ?: false
+        if (capacityFullPrecheck) {
+            return
+        }
+
+        _feedPosts.value = _feedPosts.value.map { post ->
+            if (post.id != postId) return@map post
+            val isRegged = post.registeredByMe
+            if (isRegged) {
+                post.copy(
+                    registeredByMe = false,
+                    attendees = (post.attendees - 1).coerceAtLeast(0)
+                )
+            } else {
+                if (post.capacity > 0 && post.attendees >= post.capacity) return@map post
+                post.copy(
+                    registeredByMe = true,
+                    attendees = post.attendees + 1
+                )
+            }
+        }
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.toggleCommunityEventRegistration(ApiEventRegisterRequest(postId = postId))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun assignRequestToMe(postId: String) {
+        val currentDisplayName = _currentUserDisplayName.value ?: "Me"
+        _feedPosts.value = _feedPosts.value.map { post ->
+            if (post.id != postId) return@map post
+            if (post.assignedTo != null && post.assignedTo!!.isNotBlank()) return@map post
+            if (post.status == "completed") return@map post
+            if (post.authorName.equals(currentDisplayName, ignoreCase = true)) return@map post
+            post.copy(assignedTo = currentDisplayName, status = "in progress")
+        }
+
+        val isDummyAllowed = _currentEnvironment.value.isDummyDataAllowed
+        val baseUrl = _baseUrl.value
+        if (!isDummyAllowed && baseUrl.isNotBlank()) {
+            apiScope.launch {
+                try {
+                    val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
+                    apiService.assignCommunityRequestToMe(ApiRequestAssignRequest(postId = postId))
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -1821,13 +1897,49 @@ class JobTraqRepository(
                         val mergedPolls = if (prev != null && prev.userPollVote != null) {
                             pollList.map { p ->
                                 val prevOpt = prev.pollOptions.firstOrNull { it.option.equals(p.option, ignoreCase = true) }
-                                if (prevOpt != null && p.option.equals(prev.userPollVote, ignoreCase = true)) {
-                                    p.copy(votes = maxOf(p.votes, prevOpt.votes))
-                                } else if (prevOpt != null) {
-                                    p.copy(votes = maxOf(p.votes, prevOpt.votes))
-                                } else p
+                                if (prevOpt != null) p.copy(votes = maxOf(p.votes, prevOpt.votes)) else p
                             }
                         } else pollList
+
+                        val backendAttendees = item.optInt("attendees", 0)
+                        val backendCapacity = item.optInt("capacity", 0)
+                        val backendRegisteredByMe = item.optBoolean("registeredByMe", false) ||
+                                (item.optJSONArray("registeredBy")?.let { arr ->
+                                    val me = _currentUserDisplayName.value
+                                    me != null && (0 until arr.length()).any { i ->
+                                        val u = arr.opt(i)
+                                        u is String && (u == me || u.endsWith("|$me"))
+                                    }
+                                } ?: false)
+                        val mergedRegisteredByMe = prev?.registeredByMe ?: backendRegisteredByMe
+                        val mergedAttendees = if (prev != null) {
+                            maxOf(backendAttendees, prev.attendees)
+                        } else backendAttendees
+                        val mergedCapacity = maxOf(backendCapacity, prev?.capacity ?: 0)
+
+                        val backendAssigned = item.optString("assignedTo").takeIf { it.isNotBlank() }
+                        val backendStatus = item.optString("status").takeIf { it.isNotBlank() }
+                        val mergedAssignedTo = (prev?.assignedTo?.takeIf { it.isNotBlank() }) ?: backendAssigned
+                        val mergedStatus = when {
+                            prev != null && prev.status != null && backendStatus == null -> prev.status
+                            backendStatus != null -> backendStatus
+                            else -> null
+                        }
+
+                        val tagsArray = item.optJSONArray("tags")
+                        val tagsList = mutableListOf<String>()
+                        if (tagsArray != null) {
+                            for (j in 0 until tagsArray.length()) {
+                                val t = tagsArray.optString(j)
+                                if (t.isNotBlank()) tagsList.add(t)
+                            }
+                        }
+                        val mergedTags = tagsList.ifEmpty { prev?.tags ?: emptyList() }
+                        val backendImageUrl = item.optString("imageUrl").takeIf { it.isNotBlank() }
+                        val mergedImageUrl = backendImageUrl ?: prev?.imageUrl
+
+                        val backendModStatus = item.optString("moderationStatus", "visible").ifBlank { "visible" }
+                        val mergedModStatus = prev?.moderationStatus?.takeIf { it == "removed" } ?: backendModStatus
 
                         list.add(
                             FeedPostEntity(
@@ -1846,7 +1958,17 @@ class JobTraqRepository(
                                 userPollVote = userVote,
                                 eventTitle = evTitle,
                                 eventDate = evDate,
-                                eventLocation = evLoc
+                                eventLocation = evLoc,
+                                attendees = mergedAttendees,
+                                capacity = mergedCapacity,
+                                registeredByMe = mergedRegisteredByMe,
+                                assignedTo = mergedAssignedTo,
+                                status = mergedStatus,
+                                imageUrl = mergedImageUrl,
+                                tags = mergedTags,
+                                isPinned = item.optBoolean("isPinned", prev?.isPinned ?: false),
+                                moderationStatus = mergedModStatus,
+                                flagCount = maxOf(item.optInt("flagCount", 0), prev?.flagCount ?: 0)
                             )
                         )
                     }

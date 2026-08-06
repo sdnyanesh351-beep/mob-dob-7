@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,9 +25,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
@@ -37,6 +45,14 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.HowToReg
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.runtime.rememberCoroutineScope
@@ -94,6 +110,8 @@ fun Phase3CommunityScreen(
     onToggleLike: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
     onVotePoll: (String, String, Int) -> Unit = { _, _, _ -> },
+    onToggleEventRegistration: (String) -> Unit = { },
+    onAssignRequestToMe: (String) -> Unit = { },
     onShowToast: (String) -> Unit,
     onRedeemCode: suspend (String) -> Pair<Boolean, String> = { Pair(false, "") },
     onPurchaseStreakFreeze: suspend () -> Pair<Boolean, String> = { Pair(false, "") }
@@ -138,7 +156,9 @@ fun Phase3CommunityScreen(
                 onAddPost = onAddPost,
                 onToggleLike = onToggleLike,
                 onAddComment = onAddComment,
-                onVotePoll = onVotePoll
+                onVotePoll = onVotePoll,
+                onToggleEventRegistration = onToggleEventRegistration,
+                onAssignRequestToMe = onAssignRequestToMe
             )
             1 -> AlumniMentorsSection(
                 mentors = alumniMentors,
@@ -174,7 +194,9 @@ private fun FeedSection(
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
     onAddComment: (String, String) -> Unit,
-    onVotePoll: (String, String, Int) -> Unit = { _, _, _ -> }
+    onVotePoll: (String, String, Int) -> Unit = { _, _, _ -> },
+    onToggleEventRegistration: (String) -> Unit = { },
+    onAssignRequestToMe: (String) -> Unit = { }
 ) {
     var showCreatePostDialog by remember { mutableStateOf(false) }
     var activeCommentPostId by remember { mutableStateOf<String?>(null) }
@@ -362,6 +384,7 @@ private fun FeedSection(
                         // Poll Options Display
                         if (post.type == "poll" && post.pollOptions.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
+                            val hasUserVoted = post.userPollVote != null
                             val totalVotes = post.pollOptions.sumOf { it.votes }.coerceAtLeast(1)
                             Column(
                                 modifier = Modifier
@@ -370,43 +393,86 @@ private fun FeedSection(
                                     .padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                Text(
+                                    text = if (hasUserVoted) {
+                                        "✓ You voted · Tap again to change or undo · $totalVotes total vote${if (totalVotes == 1) "" else "s"}"
+                                    } else {
+                                        "Tap an option to cast your vote · $totalVotes total vote${if (totalVotes == 1) "" else "s"}"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = if (hasUserVoted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
                                 post.pollOptions.forEachIndexed { idx, opt ->
-                                    val isMyVote = post.userPollVote != null && opt.option.equals(post.userPollVote, ignoreCase = true)
+                                    val isMyVote = hasUserVoted && opt.option.equals(post.userPollVote, ignoreCase = true)
                                     val percent = (opt.votes * 100) / totalVotes
                                     val optionBg = if (isMyVote) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-                                    val borderColor = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                                    Column(
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
                                             .background(optionBg)
-                                            .clickable(enabled = true) {
+                                            .border(
+                                                BorderStroke(
+                                                    if (isMyVote) 1.3.dp else 0.8.dp,
+                                                    if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(
+                                                        alpha = 0.6f
+                                                    )
+                                                ),
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable(enabled = true, onClick = {
                                                 onVotePoll(post.id, opt.option, idx)
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                            })
+                                            .padding(horizontal = 10.dp, vertical = 10.dp)
                                     ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.fillMaxWidth()
+                                        Column(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
-                                            Text(
-                                                text = if (isMyVote) "✓ ${opt.option}" else opt.option,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = "${opt.votes} votes ($percent%)",
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
+                                            Row(
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = if (isMyVote) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                                        contentDescription = null,
+                                                        tint = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    Text(
+                                                        text = opt.option,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${opt.votes} · $percent%",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontWeight = FontWeight.SemiBold
+                                                    ),
+                                                    color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            if (hasUserVoted) {
+                                                LinearProgressIndicator(
+                                                    progress = { opt.votes.toFloat() / totalVotes.toFloat() },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .height(6.dp)
+                                                        .clip(RoundedCornerShape(3.dp)),
+                                                    color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                                )
+                                            }
                                         }
-                                        LinearProgressIndicator(
-                                            progress = { opt.votes.toFloat() / totalVotes.toFloat() },
-                                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                                            color = if (isMyVote) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                                        )
                                     }
                                 }
                             }
@@ -420,7 +486,7 @@ private fun FeedSection(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
                             ) {
-                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                                         Spacer(modifier = Modifier.width(8.dp))
@@ -439,6 +505,189 @@ private fun FeedSection(
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(text = post.eventLocation!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
+                                    }
+                                    val attendeesCount = post.attendees.coerceAtLeast(0)
+                                    val capacityCount = post.capacity.coerceAtLeast(0)
+                                    val isFull = capacityCount > 0 && attendeesCount >= capacityCount && !post.registeredByMe
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Group,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (capacityCount > 0) {
+                                                    "$attendeesCount / $capacityCount registered"
+                                                } else {
+                                                    "$attendeesCount registered"
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (isFull) Color(0xFFBA1A1A) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (isFull) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Surface(
+                                                    color = Color(0xFFBA1A1A).copy(alpha = 0.15f),
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "FULL",
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = Color(0xFFBA1A1A)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Button(
+                                            onClick = { onToggleEventRegistration(post.id) },
+                                            enabled = !isFull,
+                                            modifier = Modifier.height(32.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (post.registeredByMe) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.primary,
+                                                contentColor = if (post.registeredByMe) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onPrimary,
+                                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            )
+                                        ) {
+                                            Icon(
+                                                imageVector = if (post.registeredByMe) Icons.Default.Close else Icons.Default.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = when {
+                                                    isFull -> "Event Full"
+                                                    post.registeredByMe -> "Unregister"
+                                                    else -> "Register"
+                                                },
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Request Card Display (Help / Referral / Appointment Requests)
+                        if (post.type == "request") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val statusRaw = post.status?.trim()?.lowercase()
+                            val resolvedStatus = when (statusRaw) {
+                                "open", "unassigned", "new" -> "Open"
+                                "in progress", "in_progress", "assigned", "claimed" -> "In Progress"
+                                "completed", "done", "closed", "resolved" -> "Completed"
+                                "cancelled", "canceled", "withdrawn" -> "Cancelled"
+                                else -> (post.status ?: "Open").trim().ifBlank { "Open" }
+                            }
+                            val (statusColor, statusBg) = when (resolvedStatus.lowercase()) {
+                                "open" -> Color(0xFF2563EB) to Color(0xFFDBEAFE)
+                                "in progress" -> Color(0xFFB45309) to Color(0xFFFEF3C7)
+                                "completed" -> Color(0xFF059669) to Color(0xFFD1FAE5)
+                                "cancelled" -> Color(0xFFBA1A1A) to Color(0xFFFCE7E7)
+                                else -> MaterialTheme.colorScheme.primary to MaterialTheme.colorScheme.primaryContainer
+                            }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = statusBg.copy(alpha = 0.35f))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.HelpOutline,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = "Request",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Surface(
+                                            color = statusBg,
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = resolvedStatus.uppercase(),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                letterSpacing = 0.3.sp,
+                                                color = statusColor
+                                            )
+                                        }
+                                    }
+                                    if (!post.assignedTo.isNullOrBlank()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Person,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Assigned to · ${post.assignedTo}",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    val buttonTitle = when (resolvedStatus.lowercase()) {
+                                        "completed" -> "Completed"
+                                        "cancelled" -> "Cancelled"
+                                        else -> "Assign to Me"
+                                    }
+                                    val isButtonEnabled = resolvedStatus.equals("Open", ignoreCase = true)
+                                            && post.assignedTo.isNullOrBlank()
+                                    Button(
+                                        onClick = { onAssignRequestToMe(post.id) },
+                                        enabled = isButtonEnabled,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(32.dp),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (!post.assignedTo.isNullOrBlank()) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primary,
+                                            contentColor = if (!post.assignedTo.isNullOrBlank()) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimary,
+                                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = if (!post.assignedTo.isNullOrBlank()) Icons.Default.Check else Icons.Default.PersonAdd,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = buttonTitle,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     }
                                 }
                             }
