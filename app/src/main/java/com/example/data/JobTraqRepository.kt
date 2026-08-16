@@ -23,7 +23,8 @@ class JobTraqRepository(
     private val sessionManager: SessionManager? = null,
     private val resumeScanHistoryDao: ResumeScanHistoryDao? = null,
     private val userDao: UserDao? = null,
-    private val streakDataStoreManager: StreakDataStoreManager? = null
+    private val streakDataStoreManager: StreakDataStoreManager? = null,
+    private val interviewDao: InterviewDao? = null
 ) {
 
     private val apiScope = CoroutineScope(Dispatchers.IO)
@@ -180,13 +181,40 @@ class JobTraqRepository(
 
     suspend fun fetchSettingsFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
         if (baseUrl.isBlank()) return@withContext
+        _settingsSyncState.value = SyncState.SYNCING
         try {
             val apiService = RetrofitClient.createApiService(baseUrl, sessionManager)
             val response = apiService.getSettings()
-            if (response.isSuccessful) {
-                // TODO: Parse API response and apply user settings once backend schema is finalized
+            if (response.isSuccessful && response.body() != null) {
+                val jsonStr = response.body()!!.string()
+                val obj = org.json.JSONObject(jsonStr)
+                if (obj.optBoolean("success", false)) {
+                    val platform = obj.optJSONObject("platform")
+                    if (platform != null) {
+                        _platformSettings.value = PlatformSettings(
+                            platformName = platform.optString("platformName", "JobTraq"),
+                            communityFeedEnabled = platform.optBoolean("communityFeedEnabled", true),
+                            jobBoardEnabled = platform.optBoolean("jobBoardEnabled", true),
+                            referralsEnabled = platform.optBoolean("referralsEnabled", true),
+                            gamificationEnabled = platform.optBoolean("gamificationEnabled", true),
+                            isAIEnabled = platform.optBoolean("isAIEnabled", false),
+                            resumeAnalyzerEnabled = platform.optBoolean("resumeAnalyzerEnabled", true),
+                            aiResumeWriterEnabled = platform.optBoolean("aiResumeWriterEnabled", true),
+                            coverLetterGeneratorEnabled = platform.optBoolean("coverLetterGeneratorEnabled", true),
+                            mockInterviewEnabled = platform.optBoolean("mockInterviewEnabled", true),
+                            careerRoadmapEnabled = platform.optBoolean("careerRoadmapEnabled", true)
+                        )
+                        _settingsSyncState.value = SyncState.SYNCED
+                        return@withContext
+                    }
+                }
+                _settingsSyncState.value = SyncState.SYNC_ERROR
+            } else {
+                _settingsSyncState.value = SyncState.SYNC_ERROR
             }
-        } catch (e: Exception) { /* Leave defaults for DEV/PROD */ }
+        } catch (e: Exception) {
+            _settingsSyncState.value = SyncState.OFFLINE_CACHED
+        }
     }
 
     suspend fun fetchResumesFromApi(baseUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
@@ -510,6 +538,40 @@ class JobTraqRepository(
     // Base API URL & Multi-tenant state
     private val _baseUrl = MutableStateFlow(AppEnvironment.DEV.defaultBaseUrl)
     val baseUrl: StateFlow<String> = _baseUrl.asStateFlow()
+
+    data class PlatformSettings(
+        val platformName: String = "JobTraq",
+        val communityFeedEnabled: Boolean = true,
+        val jobBoardEnabled: Boolean = true,
+        val referralsEnabled: Boolean = true,
+        val gamificationEnabled: Boolean = true,
+        val isAIEnabled: Boolean = false,
+        val resumeAnalyzerEnabled: Boolean = true,
+        val aiResumeWriterEnabled: Boolean = true,
+        val coverLetterGeneratorEnabled: Boolean = true,
+        val mockInterviewEnabled: Boolean = true,
+        val careerRoadmapEnabled: Boolean = true
+    )
+
+    enum class SyncState {
+        SYNCING, SYNCED, OFFLINE_CACHED, SYNC_ERROR
+    }
+
+    private val _platformSettings = MutableStateFlow(PlatformSettings())
+    val platformSettings: StateFlow<PlatformSettings> = _platformSettings.asStateFlow()
+
+    private val _settingsSyncState = MutableStateFlow(SyncState.SYNCING)
+    val settingsSyncState: StateFlow<SyncState> = _settingsSyncState.asStateFlow()
+
+    private val _dataSaverEnabled = MutableStateFlow(false)
+    val dataSaverEnabled: StateFlow<Boolean> = _dataSaverEnabled.asStateFlow()
+
+    fun setDataSaverEnabled(enabled: Boolean) {
+        _dataSaverEnabled.value = enabled
+    }
+
+    private val _isSyncingData = MutableStateFlow(false)
+    val isSyncingData: StateFlow<Boolean> = _isSyncingData.asStateFlow()
 
     fun setBaseUrl(url: String) {
         if (url.isNotBlank()) {
@@ -1713,8 +1775,10 @@ class JobTraqRepository(
     }
 
     // --- Realtime API Sync Engine ---
+    @RequiresApi(Build.VERSION_CODES.O)
     suspend fun syncAllDataFromApi(targetUrl: String = _baseUrl.value) = withContext(Dispatchers.IO) {
         if (targetUrl.isBlank()) return@withContext
+        _isSyncingData.value = true
         val withScheme = when {
             targetUrl.startsWith("http://", ignoreCase = true) ||
                 targetUrl.startsWith("https://", ignoreCase = true) -> targetUrl
@@ -1740,6 +1804,8 @@ class JobTraqRepository(
             fetchProfileActivitiesFromApi(apiService)
         } catch (e: Exception) {
             // Silence network connection issues for seamless UI resilience
+        } finally {
+            _isSyncingData.value = false
         }
     }
 
@@ -2155,8 +2221,74 @@ class JobTraqRepository(
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     private suspend fun fetchInterviewsFromApi(apiService: JobTraqMobileApiService) {
-        // AI Interview questions and analysis leverage the questions API and analyzeAnswerWithAI
+        val dao = interviewDao ?: return
+        try {
+            val res = apiService.getInterviews()
+            if (res.isSuccessful && res.body() != null) {
+                val jsonStr = res.body()!!.string()
+                val obj = JSONObject(jsonStr)
+                val dataArray = obj.optJSONArray("data")
+                if (dataArray != null && dataArray.length() > 0) {
+                    val list = mutableListOf<InterviewEntity>()
+                    for (i in 0 until dataArray.length()) {
+                        val item = dataArray.getJSONObject(i)
+                        val id = item.optString("id").ifBlank { "int-sync-$i" }
+                        val company = item.optString("companyName", "TechCorp")
+                        val title = item.optString("jobTitle", "Software Engineer")
+                        val status = item.optString("status", "Upcoming")
+                        
+                        val liveData = item.optJSONObject("liveInterviewData")
+                        var dateVal = item.optString("date", "Today")
+                        var timeVal = item.optString("time", "12:00 PM")
+                        if (liveData != null) {
+                            val scheduledTimeStr = liveData.optString("scheduledTime")
+                            if (!scheduledTimeStr.isNullOrBlank()) {
+                                try {
+                                    val instant = java.time.Instant.parse(scheduledTimeStr)
+                                    val localDateTime = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault())
+                                    val dateFormatter = java.time.format.DateTimeFormatter.ofPattern("EEE, MMMM d, yyyy", java.util.Locale.US)
+                                    val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)
+                                    dateVal = localDateTime.format(dateFormatter)
+                                    timeVal = localDateTime.format(timeFormatter)
+                                } catch (e: Exception) {
+                                    dateVal = scheduledTimeStr
+                                }
+                            }
+                        }
+
+                        val location = item.optString("location", "Virtual")
+                        val interviewer = item.optString("interviewer", "Hiring Team")
+                        val notes = item.optString("notes", "")
+                        val type = item.optString("type", "AI_MOCK")
+                        val tenant = item.optString("tenantId", "platform")
+
+                        list.add(
+                            InterviewEntity(
+                                id = id,
+                                companyName = company,
+                                jobTitle = title,
+                                status = status,
+                                date = dateVal,
+                                time = timeVal,
+                                location = location,
+                                interviewer = interviewer,
+                                notes = notes,
+                                type = type,
+                                tenantId = tenant,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                    if (list.isNotEmpty()) {
+                        dao.insertAll(list)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private suspend fun fetchReferralsFromApi(apiService: JobTraqMobileApiService) {

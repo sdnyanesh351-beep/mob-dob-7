@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Fingerprint
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 import com.example.data.AppEnvironment
+import com.example.data.JobTraqRepository
 
 @Composable
 fun SettingsScreen(
@@ -69,6 +72,10 @@ fun SettingsScreen(
     onReplayOnboarding: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null,
     isScrollable: Boolean = true,
+    syncState: JobTraqRepository.SyncState = JobTraqRepository.SyncState.SYNCED,
+    platformSettings: JobTraqRepository.PlatformSettings = JobTraqRepository.PlatformSettings(),
+    dataSaverEnabled: Boolean = false,
+    onToggleDataSaver: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isBiometricsActive by remember { mutableStateOf(true) }
@@ -470,6 +477,17 @@ fun SettingsScreen(
                     testTag = "2fa_toggle"
                 )
 
+                Spacer(modifier = Modifier.height(14.dp))
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Cloud,
+                    label = "Data Saver Mode",
+                    description = "Hide blog images to reduce network data usage",
+                    checked = dataSaverEnabled,
+                    onCheckedChange = onToggleDataSaver,
+                    testTag = "data_saver_toggle"
+                )
+
                 if (onToggleTheme != null) {
                     Spacer(modifier = Modifier.height(14.dp))
 
@@ -482,6 +500,102 @@ fun SettingsScreen(
                         testTag = "theme_toggle_switch"
                     )
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 5. REMOTE SYNCHRONIZED POLICIES
+        SettingsSectionHeader(
+            icon = Icons.Default.Security,
+            title = "Synchronized Policies",
+            subtitle = "Active platform policies synced from Web App"
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("sync_policies_card"),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Sync Status Banner
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            when (syncState) {
+                                com.example.data.JobTraqRepository.SyncState.SYNCED -> Color(0xFFE8F5E9)
+                                com.example.data.JobTraqRepository.SyncState.SYNCING -> Color(0xFFFFF3E0)
+                                com.example.data.JobTraqRepository.SyncState.OFFLINE_CACHED -> Color(0xFFECEFF1)
+                                com.example.data.JobTraqRepository.SyncState.SYNC_ERROR -> Color(0xFFFFEBEE)
+                            }
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val statusText = when (syncState) {
+                        com.example.data.JobTraqRepository.SyncState.SYNCED -> "Connected & Synced"
+                        com.example.data.JobTraqRepository.SyncState.SYNCING -> "Synchronizing policies..."
+                        com.example.data.JobTraqRepository.SyncState.OFFLINE_CACHED -> "Offline (Using Cached Local policies)"
+                        com.example.data.JobTraqRepository.SyncState.SYNC_ERROR -> "Sync Connection Failed"
+                    }
+                    val statusColor = when (syncState) {
+                        com.example.data.JobTraqRepository.SyncState.SYNCED -> Color(0xFF2E7D32)
+                        com.example.data.JobTraqRepository.SyncState.SYNCING -> Color(0xFFEF6C00)
+                        com.example.data.JobTraqRepository.SyncState.OFFLINE_CACHED -> Color(0xFF37474F)
+                        com.example.data.JobTraqRepository.SyncState.SYNC_ERROR -> Color(0xFFC62828)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Policy Items
+                PolicyItemRow(
+                    label = "Global AI Copilot Features",
+                    enabled = platformSettings.isAIEnabled
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                
+                PolicyItemRow(
+                    label = "Community Discussion Feed",
+                    enabled = platformSettings.communityFeedEnabled
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                PolicyItemRow(
+                    label = "ATS Resume Match Analyzer",
+                    enabled = platformSettings.resumeAnalyzerEnabled
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                PolicyItemRow(
+                    label = "AI Cover Letter Generator",
+                    enabled = platformSettings.coverLetterGeneratorEnabled
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+                PolicyItemRow(
+                    label = "AI Mock practice interviews",
+                    enabled = platformSettings.mockInterviewEnabled
+                )
             }
         }
 
@@ -614,5 +728,38 @@ private fun SettingsToggleRow(
             onCheckedChange = onCheckedChange,
             modifier = Modifier.testTag(testTag)
         )
+    }
+}
+
+@Composable
+private fun PolicyItemRow(
+    label: String,
+    enabled: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        )
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = if (enabled) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+        ) {
+            Text(
+                text = if (enabled) "ACTIVE" else "LOCKED",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = if (enabled) Color(0xFF2E7D32) else Color(0xFFC62828)
+                ),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
     }
 }

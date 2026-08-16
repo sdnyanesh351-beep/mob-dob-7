@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.I18nHelper
+import com.example.data.JobTraqRepository
+
 enum class JobTraqTab(val icon: ImageVector, val i18nKey: String, val tag: String) {
     PIPELINE(Icons.Default.Work, "pipeline", "tab_pipeline"),
     PREP_HUB(Icons.Default.Psychology, "prep_hub", "tab_prep"),
@@ -39,6 +41,7 @@ enum class JobTraqTab(val icon: ImageVector, val i18nKey: String, val tag: Strin
 fun JobTraqBottomNav(
     selectedTab: JobTraqTab,
     currentLanguage: String,
+    platformSettings: JobTraqRepository.PlatformSettings,
     onTabSelected: (JobTraqTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -49,7 +52,16 @@ fun JobTraqBottomNav(
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 6.dp
     ) {
-        JobTraqTab.entries.filter { it != JobTraqTab.REFERRALS && it != JobTraqTab.BLOG }.forEach { tab ->
+        val visibleTabs = JobTraqTab.entries.filter { tab ->
+            when (tab) {
+                JobTraqTab.REFERRALS -> false
+                JobTraqTab.BLOG -> false
+                JobTraqTab.COMMUNITY -> platformSettings.communityFeedEnabled
+                JobTraqTab.TOOLS -> platformSettings.isAIEnabled
+                else -> true
+            }
+        }
+        visibleTabs.forEach { tab ->
             val label = I18nHelper.getString(tab.i18nKey, currentLanguage)
             NavigationBarItem(
                 selected = selectedTab == tab,

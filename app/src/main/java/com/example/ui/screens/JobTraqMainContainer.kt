@@ -34,6 +34,14 @@ import com.example.ui.components.HeadsUpNotificationBanner
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import com.example.data.AuthDatabase
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import androidx.compose.runtime.DisposableEffect
+import com.example.ui.components.PersistentTopBanner
+import com.example.ui.components.LowBandwidthProgressBar
 
 import com.example.data.AppEnvironment
 import com.example.data.SessionManager
@@ -110,8 +118,58 @@ fun JobTraqMainContainer(
     val resumeScanHistoryDao = remember(context) { AuthDatabase.getDatabase(context).resumeScanHistoryDao() }
     val streakDataStoreManager = remember(context) { StreakDataStoreManager(context) }
 
-    val repository = remember(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager) {
-        JobTraqRepository(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager)
+    val repository = remember(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager, interviewDao) {
+        JobTraqRepository(sessionManager, resumeScanHistoryDao, userDao, streakDataStoreManager, interviewDao)
+    }
+
+    val dataSaverEnabled by repository.dataSaverEnabled.collectAsStateWithLifecycle()
+    val isSyncingData by repository.isSyncingData.collectAsStateWithLifecycle()
+
+    var isOnline by remember { mutableStateOf(true) }
+    val connectivityManager = remember(context) {
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+
+    DisposableEffect(connectivityManager) {
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        isOnline = capabilities != null && 
+                   (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR))
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                isOnline = true
+            }
+
+            override fun onLost(network: Network) {
+                isOnline = false
+            }
+        }
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(request, callback)
+
+        onDispose {
+            try {
+                connectivityManager.unregisterNetworkCallback(callback)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
+    var previousOnlineState by remember { mutableStateOf(true) }
+    LaunchedEffect(isOnline) {
+        if (isOnline != previousOnlineState) {
+            if (isOnline) {
+                snackbarHostState.showSnackbar("Internet connection restored.")
+            } else {
+                snackbarHostState.showSnackbar("Connection dropped. Using offline data.")
+            }
+            previousOnlineState = isOnline
+        }
     }
 
     val streakData by streakDataStoreManager.streakDataFlow.collectAsStateWithLifecycle(initialValue = StreakData())
@@ -164,6 +222,19 @@ fun JobTraqMainContainer(
     val profileCompletion by repository.profileCompletion.collectAsStateWithLifecycle()
     val leaderboardSource by repository.leaderboardSource.collectAsStateWithLifecycle()
     val streakSource by repository.streakSource.collectAsStateWithLifecycle()
+    val platformSettings by repository.platformSettings.collectAsStateWithLifecycle()
+    val settingsSyncState by repository.settingsSyncState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(platformSettings) {
+        val isCommunityAllowed = platformSettings.communityFeedEnabled
+        val isAIAllowed = platformSettings.isAIEnabled
+        if (selectedTab == JobTraqTab.COMMUNITY && !isCommunityAllowed) {
+            selectedTab = JobTraqTab.PIPELINE
+        }
+        if (selectedTab == JobTraqTab.TOOLS && !isAIAllowed) {
+            selectedTab = JobTraqTab.PIPELINE
+        }
+    }
 
     LaunchedEffect(Unit) {
         snapshotFlow { listOf(repository.jobs.value.size, interviews.size, repository.resumeScanHistory.value.size) }
@@ -474,14 +545,18 @@ fun JobTraqMainContainer(
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen && !isWalletScreenOpen) {
-                    JobTraqTopBar(
-                        currentLanguage = currentLanguage,
-                        activeEnvironment = activeEnvironment,
-                        streakDays = streakData.streakDays,
-                        onOpenSettings = { isSettingsScreenOpen = true },
-                        onOpenDrawer = { coroutineScope.launch { drawerState.open() } }
-                    )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    PersistentTopBanner(isOnline = isOnline)
+                    LowBandwidthProgressBar(isLoading = isSyncingData)
+                    if (!isQuizActive && !isSettingsScreenOpen && !isReferralsScreenOpen && !isWalletScreenOpen) {
+                        JobTraqTopBar(
+                            currentLanguage = currentLanguage,
+                            activeEnvironment = activeEnvironment,
+                            streakDays = streakData.streakDays,
+                            onOpenSettings = { isSettingsScreenOpen = true },
+                            onOpenDrawer = { coroutineScope.launch { drawerState.open() } }
+                        )
+                    }
                 }
             },
             bottomBar = {
@@ -489,6 +564,7 @@ fun JobTraqMainContainer(
                     JobTraqBottomNav(
                         selectedTab = selectedTab,
                         currentLanguage = currentLanguage,
+                        platformSettings = platformSettings,
                         onTabSelected = { selectedTab = it }
                     )
                 }
@@ -516,6 +592,10 @@ fun JobTraqMainContainer(
                         darkThemeOverride = darkThemeOverride,
                         onToggleTheme = onToggleTheme,
                         onReplayOnboarding = onReplayOnboarding,
+                        syncState = settingsSyncState,
+                        platformSettings = platformSettings,
+                        dataSaverEnabled = dataSaverEnabled,
+                        onToggleDataSaver = { repository.setDataSaverEnabled(it) },
                         onBack = { isSettingsScreenOpen = false }
                     )
                 } else if (isReferralsScreenOpen) {
@@ -604,6 +684,9 @@ fun JobTraqMainContainer(
                                     challenges = challenges,
                                     attempts = attempts,
                                     dailyStreakState = dailyStreakState,
+                                    isAIEnabled = platformSettings.isAIEnabled,
+                                    mockInterviewEnabled = platformSettings.mockInterviewEnabled,
+                                    interviews = interviews,
                                     onCompleteDailyChallenge = { xp -> repository.completeDailyChallenge(xp) },
                                     onUpdateNotificationSettings = { enabled, time, freq, sound, vibrate ->
                                         repository.updateNotificationSettings(enabled, time, freq, sound, vibrate)
@@ -659,6 +742,7 @@ fun JobTraqMainContainer(
                                     alumniMentors = alumniMentors,
                                     currentTenant = currentTenant,
                                     leaderboard = referralLeaderboard,
+                                    isOnline = isOnline,
                                     profileCompletionPercent = profileCompletion.percent,
                                     leaderboardSource = leaderboardSource,
                                     streakSource = streakSource,
@@ -694,6 +778,7 @@ fun JobTraqMainContainer(
                             JobTraqTab.BLOG -> {
                                 Phase6BlogScreen(
                                     blogPosts = blogPosts,
+                                    dataSaverEnabled = dataSaverEnabled,
                                     onRefresh = {
                                         coroutineScope.launch {
                                             repository.syncAllDataFromApi(baseUrl)
@@ -720,6 +805,7 @@ fun JobTraqMainContainer(
                                     scanHistory = resumeScanHistory,
                                     coverLetters = coverLetters,
                                     activityLogs = activityLogs,
+                                    platformSettings = platformSettings,
                                     onAddResume = { title, role, content ->
                                         repository.addResume(title, role, content)
                                         showToast("Resume '$title' saved!")

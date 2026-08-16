@@ -93,7 +93,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
+import androidx.compose.runtime.LaunchedEffect
+import com.example.data.JobTraqRepository
 
 @Composable
 fun Phase4AdvancedToolsScreen(
@@ -101,6 +102,7 @@ fun Phase4AdvancedToolsScreen(
     scanHistory: List<ResumeScanHistoryEntity> = emptyList(),
     coverLetters: List<CoverLetterEntity> = emptyList(),
     activityLogs: List<String> = emptyList(),
+    platformSettings: JobTraqRepository.PlatformSettings = JobTraqRepository.PlatformSettings(),
     onAddResume: (String, String, String) -> Unit,
     onAnalyzeResume: suspend (String, String) -> ResumeEntity,
     onGenerateCoverLetter: suspend (String, String, String, String) -> CoverLetterEntity = { _, _, _, _ ->
@@ -111,8 +113,26 @@ fun Phase4AdvancedToolsScreen(
     onViewScanReport: (ResumeScanHistoryEntity) -> Unit = {},
     onShowToast: (String) -> Unit
 ) {
-    var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Resumes & AI ATS, 1: AI Cover Letters, 2: Scan History, 3: Activity Log
-    val subTabs = listOf("Resumes & AI ATS", "AI Cover Letters & DM", "Scan History", "Activity Log")
+    val allowedTabs = remember(platformSettings) {
+        val tabs = mutableListOf<Pair<Int, String>>()
+        if (platformSettings.resumeAnalyzerEnabled) {
+            tabs.add(0 to "Resumes & AI ATS")
+        }
+        if (platformSettings.coverLetterGeneratorEnabled) {
+            tabs.add(1 to "AI Cover Letters & DM")
+        }
+        tabs.add(2 to "Scan History")
+        tabs.add(3 to "Activity Log")
+        tabs
+    }
+
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(allowedTabs) {
+        if (selectedTabIndex >= allowedTabs.size) {
+            selectedTabIndex = 0
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -120,29 +140,30 @@ fun Phase4AdvancedToolsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         ScrollableTabRow(
-            selectedTabIndex = selectedSubTab,
+            selectedTabIndex = selectedTabIndex,
             containerColor = MaterialTheme.colorScheme.surface,
             edgePadding = 16.dp
         ) {
-            subTabs.forEachIndexed { index, title ->
+            allowedTabs.forEachIndexed { index, (id, title) ->
                 Tab(
-                    selected = selectedSubTab == index,
-                    onClick = { selectedSubTab = index },
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
                     text = {
                         Text(
                             text = title,
-                            fontWeight = if (selectedSubTab == index) FontWeight.Bold else FontWeight.Normal,
+                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
                             fontSize = 12.sp,
                             maxLines = 1,
                             softWrap = false
                         )
                     },
-                    modifier = Modifier.testTag("tools_subtab_$index")
+                    modifier = Modifier.testTag("tools_subtab_$id")
                 )
             }
         }
 
-        when (selectedSubTab) {
+        val activeTabId = allowedTabs.getOrNull(selectedTabIndex)?.first ?: 0
+        when (activeTabId) {
             0 -> ResumesAndAiSection(
                 resumes = resumes,
                 scanHistory = scanHistory,

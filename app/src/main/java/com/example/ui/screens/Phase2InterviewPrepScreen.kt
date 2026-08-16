@@ -110,10 +110,13 @@ fun Phase2InterviewPrepScreen(
     challenges: List<QuizChallengeEntity> = emptyList(),
     attempts: List<QuizAttemptEntity> = emptyList(),
     dailyStreakState: DailyStreakNotificationState = DailyStreakNotificationState(),
-    onCompleteDailyChallenge: (Int) -> Unit = {},
-    onUpdateNotificationSettings: (Boolean, String, String, Boolean, Boolean) -> Unit = { _, _, _, _, _ -> },
-    onTriggerTestNotification: () -> Unit = {},
-    onSaveQuizResult: (QuizResult) -> Unit = {},
+    isAIEnabled: Boolean = true,
+    mockInterviewEnabled: Boolean = true,
+    interviews: List<InterviewEntity> = emptyList(),
+    onCompleteDailyChallenge: (Int) -> Unit,
+    onUpdateNotificationSettings: (Boolean, String, String, Boolean, Boolean) -> Unit,
+    onTriggerTestNotification: () -> Unit,
+    onSaveQuizResult: (QuizResult) -> Unit,
     onToggleBookmark: (String) -> Unit,
     onCreateQuiz: (String, String, List<QuestionEntity>) -> Unit,
     onCreateChallenge: ((QuizResult, String, List<String>) -> QuizChallengeEntity)? = null,
@@ -121,9 +124,9 @@ fun Phase2InterviewPrepScreen(
     onAnalyzeAnswerWithAI: suspend (String, String) -> MockAnswerAnalysis = { _, _ ->
         MockAnswerAnalysis(88, "", "", "", "", emptyList(), emptyList(), "")
     },
-    onQuizStateChanged: (Boolean) -> Unit = {},
+    onQuizStateChanged: (Boolean) -> Unit,
     onShareToCommunity: ((String) -> Unit)? = null,
-    onSchedulePracticeInterview: (InterviewEntity) -> Unit = {},
+    onSchedulePracticeInterview: (InterviewEntity) -> Unit,
     onShowToast: (String) -> Unit
 ) {
     var selectedSubTab by remember { mutableIntStateOf(0) } // 0: Questions, 1: Quizzes, 2: Quiz History & Challenges 🏆
@@ -201,6 +204,9 @@ fun Phase2InterviewPrepScreen(
                     onToggleBookmark = onToggleBookmark,
                     onShareToCommunity = onShareToCommunity,
                     onSchedulePracticeInterview = onSchedulePracticeInterview,
+                    isAIEnabled = isAIEnabled,
+                    mockInterviewEnabled = mockInterviewEnabled,
+                    interviews = interviews,
                     onShowToast = onShowToast
                 )
 
@@ -315,6 +321,9 @@ private fun QuestionBankSection(
     onToggleBookmark: (String) -> Unit,
     onShareToCommunity: ((String) -> Unit)? = null,
     onSchedulePracticeInterview: (InterviewEntity) -> Unit,
+    isAIEnabled: Boolean,
+    mockInterviewEnabled: Boolean,
+    interviews: List<InterviewEntity>,
     onShowToast: (String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -582,7 +591,16 @@ private fun QuestionBankSection(
         }
 
         item {
+            UpcomingInterviewsSection(
+                interviews = interviews,
+                onShowToast = onShowToast
+            )
+        }
+
+        item {
             BookMockInterviewSection(
+                isAIEnabled = isAIEnabled,
+                mockInterviewEnabled = mockInterviewEnabled,
                 onSchedulePracticeInterview = onSchedulePracticeInterview,
                 onShowToast = onShowToast
             )
@@ -862,7 +880,132 @@ private fun QuizzesSection(
 
 
 @Composable
+private fun UpcomingInterviewsSection(
+    interviews: List<InterviewEntity>,
+    onShowToast: (String) -> Unit
+) {
+    val upcoming = remember(interviews) {
+        interviews.filter { it.status.equals("Upcoming", ignoreCase = true) }
+    }
+
+    if (upcoming.isNotEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Text(
+                text = "Upcoming Interviews",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            
+            upcoming.forEach { interview ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .testTag("upcoming_interview_card_${interview.id}"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = when (interview.type) {
+                                    "JOB_TRACKER" -> Color(0xFFE3F2FD)
+                                    "AI_MOCK" -> Color(0xFFE8F5E9)
+                                    "EXPERT" -> Color(0xFFF3E5F5)
+                                    else -> Color(0xFFFFF3E0)
+                                }
+                            ) {
+                                Text(
+                                    text = when (interview.type) {
+                                        "JOB_TRACKER" -> "Job Tracker"
+                                        "AI_MOCK" -> "AI Mock"
+                                        "EXPERT" -> "Expert Mentor"
+                                        else -> "Peer Practice"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = when (interview.type) {
+                                            "JOB_TRACKER" -> Color(0xFF0D47A1)
+                                            "AI_MOCK" -> Color(0xFF1B5E20)
+                                            "EXPERT" -> Color(0xFF4A148C)
+                                            else -> Color(0xFFE65100)
+                                        }
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            
+                            Text(
+                                text = "${interview.date} • ${interview.time}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = interview.jobTitle,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = interview.companyName,
+                            style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+
+                        if (interview.interviewer.isNotBlank() && interview.interviewer != "Gemini AI" && interview.interviewer != "Hiring Team") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Interviewer: ${interview.interviewer}",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                            }
+                        }
+
+                        if (interview.notes.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Notes: ${interview.notes}",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
 private fun BookMockInterviewSection(
+    isAIEnabled: Boolean,
+    mockInterviewEnabled: Boolean,
     onSchedulePracticeInterview: (InterviewEntity) -> Unit,
     onShowToast: (String) -> Unit
 ) {
@@ -887,6 +1030,7 @@ private fun BookMockInterviewSection(
         Spacer(modifier = Modifier.height(20.dp))
 
         // AI Mock Interview Card
+        val isMockAIAllowed = isAIEnabled && mockInterviewEnabled
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -899,26 +1043,31 @@ private fun BookMockInterviewSection(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (isMockAIAllowed) MaterialTheme.colorScheme.primary else Color.Gray,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Practice with Gemini AI",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        text = if (isMockAIAllowed) "Practice with Gemini AI" else "Practice with Gemini AI (Locked)",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = if (isMockAIAllowed) MaterialTheme.colorScheme.onSurface else Color.Gray
+                        )
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Instant audio-first interactive mock interview powered by Gemini 3.5 Flash.",
+                    text = if (isMockAIAllowed) "Instant audio-first interactive mock interview powered by Gemini 3.5 Flash."
+                           else "AI Mock Interviews are disabled by your platform policies.",
                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = { showAiDialog = true },
+                    enabled = isMockAIAllowed,
                     shape = RoundedCornerShape(16.dp)
                 ) {
-                    Text("Start Instant AI Session")
+                    Text(if (isMockAIAllowed) "Start Instant AI Session" else "Policy Disabled")
                 }
             }
         }

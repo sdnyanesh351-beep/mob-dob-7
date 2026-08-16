@@ -31,6 +31,8 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.example.data.BlogPostEntity
 
+import com.example.ui.components.DataSaverBadge
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Phase6BlogScreen(
@@ -38,6 +40,7 @@ fun Phase6BlogScreen(
     onRefresh: () -> Unit,
     onCreateBlogPost: (String, String, String, List<String>, String?) -> Unit,
     onToggleBookmark: (String) -> Unit,
+    dataSaverEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -180,7 +183,8 @@ fun Phase6BlogScreen(
                         BlogPostCardItem(
                             post = post,
                             onClick = { activeReadPost = post },
-                            onToggleBookmark = { onToggleBookmark(post.id) }
+                            onToggleBookmark = { onToggleBookmark(post.id) },
+                            dataSaverEnabled = dataSaverEnabled
                         )
                     }
                 }
@@ -193,7 +197,8 @@ fun Phase6BlogScreen(
         BlogPostReadDialog(
             post = post,
             onDismiss = { activeReadPost = null },
-            onToggleBookmark = { onToggleBookmark(post.id) }
+            onToggleBookmark = { onToggleBookmark(post.id) },
+            dataSaverEnabled = dataSaverEnabled
         )
     }
 
@@ -212,8 +217,9 @@ fun Phase6BlogScreen(
 @Composable
 fun BlogPostCardItem(
     post: BlogPostEntity,
-    onClick: () -> Unit,
     onToggleBookmark: () -> Unit,
+    onClick: () -> Unit,
+    dataSaverEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -225,16 +231,28 @@ fun BlogPostCardItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column {
-            // Optional Image
-            val painter = rememberAsyncImagePainter(post.imageUrl ?: "https://placehold.co/800x400.png")
-            Image(
-                painter = painter,
-                contentDescription = post.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp),
-                contentScale = ContentScale.Crop
-            )
+            if (dataSaverEnabled) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    DataSaverBadge()
+                }
+            } else {
+                // Optional Image
+                val painter = rememberAsyncImagePainter(post.imageUrl ?: "https://placehold.co/800x400.png")
+                Image(
+                    painter = painter,
+                    contentDescription = post.title,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -306,7 +324,8 @@ fun BlogPostCardItem(
 fun BlogPostReadDialog(
     post: BlogPostEntity,
     onDismiss: () -> Unit,
-    onToggleBookmark: () -> Unit
+    onToggleBookmark: () -> Unit,
+    dataSaverEnabled: Boolean = false
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -323,13 +342,24 @@ fun BlogPostReadDialog(
                         .fillMaxWidth()
                         .height(240.dp)
                 ) {
-                    val painter = rememberAsyncImagePainter(post.imageUrl ?: "https://placehold.co/800x400.png")
-                    Image(
-                        painter = painter,
-                        contentDescription = post.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (dataSaverEnabled) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            DataSaverBadge()
+                        }
+                    } else {
+                        val painter = rememberAsyncImagePainter(post.imageUrl ?: "https://placehold.co/800x400.png")
+                        Image(
+                            painter = painter,
+                            contentDescription = post.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                     // Gradient overlay for title readability if needed, or back button block
                     Box(
                         modifier = Modifier

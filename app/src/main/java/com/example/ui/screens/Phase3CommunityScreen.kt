@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.components.FullScreenOfflineState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -105,6 +106,7 @@ fun Phase3CommunityScreen(
     profileCompletionPercent: Int = 0,
     leaderboardSource: String = "sample",
     streakSource: String = "local",
+    isOnline: Boolean = true,
     onRefresh: (() -> Unit)? = null,
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
@@ -152,6 +154,7 @@ fun Phase3CommunityScreen(
             0 -> FeedSection(
                 posts = feedPosts,
                 currentTenant = currentTenant,
+                isOnline = isOnline,
                 onRefresh = if (selectedSubTab == 0) onRefresh else null,
                 onAddPost = onAddPost,
                 onToggleLike = onToggleLike,
@@ -190,6 +193,7 @@ fun Phase3CommunityScreen(
 private fun FeedSection(
     posts: List<FeedPostEntity>,
     currentTenant: String,
+    isOnline: Boolean = true,
     onRefresh: (() -> Unit)? = null,
     onAddPost: (String, String, String, List<String>?, String?, String?, String?, Int?) -> Unit,
     onToggleLike: (String) -> Unit,
@@ -282,13 +286,21 @@ private fun FeedSection(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Posts List
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
+        if (!isOnline && tenantPosts.isEmpty()) {
+            FullScreenOfflineState(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                onRetry = { onRefresh?.invoke() }
+            )
+        } else {
+            // Posts List
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
             if (tenantPosts.isEmpty()) {
                 items(3) {
                     com.example.ui.components.SkeletonPlaceholderCard(modifier = Modifier.padding(vertical = 4.dp))
@@ -836,6 +848,7 @@ private fun FeedSection(
             }
             }
             item { Spacer(modifier = Modifier.height(80.dp)) }
+        }
         }
         }
 
