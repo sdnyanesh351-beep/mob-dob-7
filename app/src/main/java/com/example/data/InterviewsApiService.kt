@@ -181,16 +181,12 @@ private fun InterviewBackendDto.toUiInterviewItem(defaultTenantId: String = "pla
     }
     
     val resolvedStatus = sequenceOf(status).firstOrNull { !it.isNullOrBlank() } ?: "Upcoming"
-    val resolvedLocation = sequenceOf(location, venue, mode).firstOrNull { !it.isNullOrBlank() } ?: "TBD"
     val resolvedInterviewer = sequenceOf(
         interviewer, 
         interviewerName, 
         panel, 
         liveInterviewData?.participants?.firstOrNull { it?.role?.lowercase() == "interviewer" }?.name
     ).firstOrNull { !it.isNullOrBlank() } ?: "TBD"
-    
-    val resolvedNotes = sequenceOf(notes, description).firstOrNull { !it.isNullOrBlank() } ?: ""
-    val resolvedTenant = sequenceOf(tenantId, tenantIdSnake).firstOrNull { !it.isNullOrBlank() } ?: defaultTenantId
     
     val resolvedType = when {
         resolvedJobTitle.contains("Quiz", ignoreCase = true) || resolvedCompany.contains("Quiz", ignoreCase = true) -> "QUIZ"
@@ -199,6 +195,15 @@ private fun InterviewBackendDto.toUiInterviewItem(defaultTenantId: String = "pla
         resolvedJobTitle.contains("Friend", ignoreCase = true) || resolvedJobTitle.contains("Peer", ignoreCase = true) || resolvedCompany.contains("Peer", ignoreCase = true) -> "FRIEND"
         else -> "JOB_TRACKER"
     }
+
+    val resolvedLocation = sequenceOf(location, venue, mode).firstOrNull { !it.isNullOrBlank() } ?: when (resolvedType) {
+        "AI_MOCK" -> "AI Coach (Virtual)"
+        "JOB_TRACKER", "EXPERT", "FRIEND" -> "Google Meet / Zoom"
+        else -> "TBD"
+    }
+
+    val resolvedNotes = sequenceOf(notes, description).firstOrNull { !it.isNullOrBlank() } ?: ""
+    val resolvedTenant = sequenceOf(tenantId, tenantIdSnake).firstOrNull { !it.isNullOrBlank() } ?: defaultTenantId
     
     return InterviewItem(
         id = resolvedId,
